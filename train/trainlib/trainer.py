@@ -5,6 +5,8 @@ from torch.utils.tensorboard import SummaryWriter
 import tqdm
 import warnings
 
+from src.util import util
+
 
 class Trainer:
     def __init__(self, net, train_dataset, test_dataset, args, conf, device=None):
@@ -150,6 +152,8 @@ class Trainer:
 
         step_id = self.start_iter_id
 
+        util.print_with_time("Starting training with", self.num_epochs, "epochs")
+
         progress = tqdm.tqdm(bar_format="[{rate_fmt}] ")
         for epoch in range(self.num_epochs):
             self.writer.add_scalar(
@@ -162,7 +166,7 @@ class Trainer:
                     losses = self.train_step(data, global_step=step_id)
                     loss_str = fmt_loss_str(losses)
                     if batch % self.print_interval == 0:
-                        print(
+                        util.print_with_time(
                             "E",
                             epoch,
                             "B",
@@ -183,10 +187,10 @@ class Trainer:
                         self.writer.add_scalars(
                             "test", test_losses, global_step=step_id
                         )
-                        print("*** Eval:", "E", epoch, "B", batch, test_loss_str, " lr")
+                        util.print_with_time("*** Eval:", "E", epoch, "B", batch, test_loss_str, " lr")
 
                     if batch % self.save_interval == 0 and (epoch > 0 or batch > 0):
-                        print("saving")
+                        util.print_with_time("saving")
                         if self.managed_weight_saving:
                             self.net.save_weights(self.args)
                         else:
@@ -202,7 +206,7 @@ class Trainer:
                         self.extra_save_state()
 
                     if batch % self.vis_interval == 0:
-                        print("generating visualization")
+                        util.print_with_time("generating visualization")
                         if self.fixed_test:
                             test_data = next(iter(self.test_data_loader))
                         else:

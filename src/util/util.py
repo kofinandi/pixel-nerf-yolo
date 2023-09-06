@@ -1,3 +1,5 @@
+import datetime
+
 import cv2
 import numpy as np
 import torch
@@ -305,6 +307,17 @@ def rot_theta(th):
         dtype=torch.float32,
     )
 
+def rot_kappa(kappa):
+    return torch.tensor(
+        [
+            [np.cos(kappa), -np.sin(kappa), 0, 0],
+            [np.sin(kappa), np.cos(kappa), 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+        ],
+        dtype=torch.float32,
+    )
+
 
 def pose_spherical(theta, phi, radius):
     """
@@ -322,6 +335,18 @@ def pose_spherical(theta, phi, radius):
     )
     return c2w
 
+def pose_spherical2(theta, kappa, radius):
+    c2w = trans_t(radius)
+    c2w = rot_kappa(kappa / 180.0 * np.pi) @ c2w
+    c2w = rot_theta(theta / 180.0 * np.pi) @ c2w
+    c2w = (
+        torch.tensor(
+            [[-1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
+            dtype=torch.float32,
+        )
+        @ c2w
+    )
+    return c2w
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -536,3 +561,9 @@ def get_module(net):
         return net.module
     else:
         return net
+
+
+def print_with_time(*args, **kwargs):
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+    message = ' '.join(map(str, args))
+    print(f"[{timestamp}] {message}", **kwargs)
