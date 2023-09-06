@@ -16,6 +16,7 @@ from render import NeRFRenderer
 from model import make_model
 from scipy.interpolate import CubicSpline
 import tqdm
+import torchvision.transforms as transforms
 
 
 def extra_args(parser):
@@ -63,8 +64,11 @@ def extra_args(parser):
 args, conf = util.args.parse_args(extra_args)
 args.resume = True
 
+# scale: egyszeru szorzo a kimeneti meretekre
+
 device = util.get_cuda(args.gpu_id[0])
 
+# itt tortenik az adatok beolvasasa
 dset = get_split_dataset(
     args.dataset_format, args.datadir, want_split=args.split, training=False
 )
@@ -73,8 +77,12 @@ data = dset[args.subset]
 data_path = data["path"]
 print("Data instance loaded:", data_path)
 
+# ezek a kepek, nehannyal dolgozik, a tobbi meg nyilvan ellenorzesre van torch.Tensor(49, 3, 400, 300)
+# torch.Tensor(hany kep van, 3 RGB, magassag, szelesseg)
+# naluk 49 kepbol all egy jelenet, 400x300-as felbontasban
 images = data["images"]  # (NV, 3, H, W)
 
+# ezek az iranyok, ahonnan a kepek keszultek
 poses = data["poses"]  # (NV, 4, 4)
 focal = data["focal"]
 if isinstance(focal, float):
@@ -83,6 +91,7 @@ if isinstance(focal, float):
     focal = torch.tensor(focal, dtype=torch.float32)
 focal = focal[None]
 
+# kamera kozeppontja
 c = data.get("c")
 if c is not None:
     c = c.to(device=device).unsqueeze(0)
@@ -100,9 +109,11 @@ if args.scale != 1.0:
         )
     H, W = Ht, Wt
 
+# halo betoltese
 net = make_model(conf["model"]).to(device=device)
 net.load_weights(args)
 
+# renderer betoltese aminek odaadjuk a halot
 renderer = NeRFRenderer.from_conf(
     conf["renderer"], lindisp=dset.lindisp, eval_batch_size=args.ray_batch_size,
 ).to(device=device)
@@ -117,7 +128,9 @@ print("Generating rays")
 
 dtu_format = hasattr(dset, "sub_format") and dset.sub_format == "dtu"
 
-if dtu_format:
+# ez az if-else annyit csinal hogy valami dtu specifikus kamera poziciokat allit elo (ha dtu render van), amugy sima 360
+# if dtu_format:
+if False:
     print("Using DTU camera trajectory")
     # Use hard-coded pose interpolation from IDR for DTU
 
@@ -171,6 +184,7 @@ else:
         0,
     )  # (NV, 4, 4)
 
+# a korabbi kamera poziciok alapjan letrehozza a sugarakat
 render_rays = util.gen_rays(
     render_poses,
     W,
@@ -184,16 +198,78 @@ render_rays = util.gen_rays(
 
 focal = focal.to(device=device)
 
+# forras kepek kivalasztasa, vagy random
 source = torch.tensor(list(map(int, args.source.split())), dtype=torch.long)
 NS = len(source)
 random_source = NS == 1 and source[0] == -1
 assert not (source >= NV).any()
 
+# eredeti NeRF paperben van szo a coarse es fine renderrol, ez a rendereles gyorsitasa miatt jo
 if renderer.n_coarse < 64:
     # Ensure decent sampling resolution
     renderer.n_coarse = 64
     renderer.n_fine = 128
 
+
+# ------------------------------------------------------------
+
+image_dir = 'C:/Users/kofinandi/Downloads/test_set'
+
+image_tensors = []
+pose_tensors = []
+
+for filename in os.listdir(image_dir):
+    if filename.endswith('.jpg') or filename.endswith('.png'):
+        image_path = os.path.join(image_dir, filename)
+        image = imageio.imread(image_path)[..., :3]
+
+        print("image: " + filename)
+
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ])
+
+        tensor = transform(image)
+
+        image_tensors.append(tensor)
+
+    if filename.endswith('.npy'):
+        if filename.startswith('intrinsic'):
+            print("intrinsic: " + filename)
+            intrinsic = np.load(os.path.join(image_dir, filename))
+        if filename.startswith('extrinsic'):
+            print("extrinsic: " + filename)
+            extrinsic = np.load(os.path.join(image_dir, filename))
+
+            pose = np.identity(4)
+            pose[0:3, 0:3] = extrinsic[0:3, 0:3].transpose()
+            pose[0:3, 3] = extrinsic[0:3, 3]
+
+            pose = extrinsic
+
+            pose = (
+                    torch.tensor([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=torch.float32)
+                    @ torch.tensor(pose, dtype=torch.float32)
+                    @ torch.tensor([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=torch.float32)
+            )
+
+            pose_tensors.append(pose)
+
+tensor_batch = torch.stack(image_tensors).to(device=device)
+
+print('Tensor shape:', tensor_batch.shape)
+
+pose_tensors = torch.stack(pose_tensors).to(device=device)
+
+intrinsic = np.load('C:/Users/kofinandi/Downloads/test_set/intrinsic_0002.npy')
+focal = torch.tensor(([intrinsic[0, 0], intrinsic[1, 1]]), dtype=torch.float32).unsqueeze(0).to(device=device)
+
+# ------------------------------------------------------------
+
+
+
+# nyilvan no grad mert test time van, forward propagation es kepek szamolasa megy
 with torch.no_grad():
     print("Encoding source view(s)")
     if random_source:
@@ -201,15 +277,20 @@ with torch.no_grad():
     else:
         src_view = source
 
+    # beadja a halonak a kepeket es a poziciokat, ezekhez mar csak a pontos sugarak (5d koordinatak) kellenek
     net.encode(
         images[src_view].unsqueeze(0),
         poses[src_view].unsqueeze(0).to(device=device),
+        # tensor_batch.unsqueeze(0),
+        # pose_tensors.unsqueeze(0),
+        # poses[43].unsqueeze(0).unsqueeze(0).to(device=device),
         focal,
         c=c,
     )
 
     print("Rendering", args.num_views * H * W, "rays")
     all_rgb_fine = []
+    # ez a ciklus rendereli az egyes sugarakat
     for rays in tqdm.tqdm(
         torch.split(render_rays.view(-1, 8), args.ray_batch_size, dim=0)
     ):
@@ -219,8 +300,10 @@ with torch.no_grad():
     rgb_fine = torch.cat(all_rgb_fine)
     # rgb_fine (V*H*W, 3)
 
+    # megvan az osszes sugar egy nagy tombben, vissza kell alakitani a kepekbe
     frames = rgb_fine.view(-1, H, W, 3)
 
+# innentol kiiras videoba
 print("Writing video")
 vid_name = "{:04}".format(args.subset)
 if args.split == "test":
