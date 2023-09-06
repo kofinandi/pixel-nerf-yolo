@@ -32,7 +32,7 @@ def parse_args(
         "-F",
         type=str,
         default=None,
-        help="Dataset format, multi_obj | dvr | dvr_gen | dvr_dtu | srn",
+        help="Dataset format, multi_obj | dvr | dvr_gen | dvr_dtu | srn | yolo",
     )
     parser.add_argument(
         "--exp_group_name",
