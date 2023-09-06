@@ -13,7 +13,7 @@
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
     <option name="SCRIPT_NAME" value="$PROJECT_DIR$/eval/gen_video.py" />
-    <option name="PARAMETERS" value="-n dtu --gpu_id 0 --split val -D $USER_HOME$/Downloads/dtu_dataset/rs_dtu_4 -S 2 --scale 0.25 --source &quot;17 32 41&quot;" />
+    <option name="PARAMETERS" value="-n dtu --gpu_id 0 --split val -D ./data/dtu_dataset/rs_dtu_4 -S 4 --scale 0.25 --source &quot;17 32 41&quot;" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="false" />

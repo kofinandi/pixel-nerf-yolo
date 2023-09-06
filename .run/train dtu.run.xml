@@ -13,7 +13,7 @@
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
     <option name="SCRIPT_NAME" value="$PROJECT_DIR$/train/train.py" />
-    <option name="PARAMETERS" value="-n dtu_exp -c conf/exp/dtu.conf -D $USER_HOME$/Downloads/dtu_dataset/rs_dtu_4 -V 3 --gpu_id=0 --resume" />
+    <option name="PARAMETERS" value="-n dtu --dataset_format dvr_dtu -c conf/exp/dtu.conf -D ./data/dtu_dataset/rs_dtu_4 -V 3 --gpu_id=0 --resume" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="false" />

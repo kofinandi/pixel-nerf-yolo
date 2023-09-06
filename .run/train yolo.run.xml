@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="gen_video dtu_exp" type="PythonConfigurationType" factoryName="Python">
+  <configuration default="false" name="train yolo" type="PythonConfigurationType" factoryName="Python">
     <module name="pixel-nerf" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
@@ -12,8 +12,8 @@
     <option name="ADD_CONTENT_ROOTS" value="true" />
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-    <option name="SCRIPT_NAME" value="$PROJECT_DIR$/eval/gen_video.py" />
-    <option name="PARAMETERS" value="-n dtu_exp --dataset_format dvr_dtu --gpu_id 0 --split val -D ./data/dtu_dataset/rs_dtu_4 -S 4 --scale 0.25 --source &quot;14 28 44&quot;" />
+    <option name="SCRIPT_NAME" value="$PROJECT_DIR$/train/train.py" />
+    <option name="PARAMETERS" value="-n yolo --dataset_format yolo -c conf/exp/dtu.conf -D ./data/yolo -V 3 --gpu_id=0 --resume" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="false" />
