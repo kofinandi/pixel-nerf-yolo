@@ -19,7 +19,7 @@ __pycache__/
 *.swp
 
 # Custom
-checkpoints/
-visuals/
-logs/
-data/
+/checkpoints/
+/visuals/
+/logs/
+/data/
