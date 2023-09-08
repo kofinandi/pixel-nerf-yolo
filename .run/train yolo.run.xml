@@ -1,5 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="train yolo" type="PythonConfigurationType" factoryName="Python">
+    <output_file path="$PROJECT_DIR$/logs/yolo" is_save="true" />
     <module name="pixel-nerf" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
