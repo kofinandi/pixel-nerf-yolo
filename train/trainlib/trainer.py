@@ -5,7 +5,7 @@ from torch.utils.tensorboard import SummaryWriter
 import tqdm
 import warnings
 
-from src.util import util
+from util import util
 
 
 class Trainer:
