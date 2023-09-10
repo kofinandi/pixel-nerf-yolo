@@ -216,6 +216,10 @@ class Trainer:
                             vis, vis_vals = self.vis_step(
                                 test_data, global_step=step_id
                             )
+                            
+                        if vis is None and vis_vals is None:
+                            return
+
                         if vis_vals is not None:
                             self.writer.add_scalars(
                                 "vis", vis_vals, global_step=step_id
@@ -232,9 +236,6 @@ class Trainer:
                                 ),
                                 vis_u8,
                             )
-
-                        if vis is None and vis_vals is None:
-                            return
 
                     if (
                         batch == self.num_total_batches - 1
