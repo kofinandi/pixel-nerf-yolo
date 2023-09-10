@@ -233,6 +233,9 @@ class Trainer:
                                 vis_u8,
                             )
 
+                        if vis is None and vis_vals is None:
+                            return
+
                     if (
                         batch == self.num_total_batches - 1
                         or batch % self.accu_grad == self.accu_grad - 1

@@ -307,6 +307,10 @@ if __name__ == '__main__':
                 alpha_coarse_cmap,
             ]
 
+            if rgb_coarse_np.min() == 0 and rgb_coarse_np.max() == 0:
+                print("coarse rgb is all 0")
+                return None, None
+
             vis_coarse = np.hstack(vis_list)
             vis = vis_coarse
 
@@ -327,6 +331,10 @@ if __name__ == '__main__':
                     alpha_fine_cmap,
                 ]
 
+                if rgb_fine_np.min() == 0 and rgb_fine_np.max() == 0:
+                    print("fine rgb is all 0")
+                    return None, None
+
                 vis_fine = np.hstack(vis_list)
                 vis = np.vstack((vis_coarse, vis_fine))
                 rgb_psnr = rgb_fine_np
@@ -344,3 +352,9 @@ if __name__ == '__main__':
 
     trainer = PixelNeRFTrainer()
     trainer.start()
+
+    while True:
+        print('Restarting training')
+        args.resume = False
+        trainer = PixelNeRFTrainer()
+        trainer.start()

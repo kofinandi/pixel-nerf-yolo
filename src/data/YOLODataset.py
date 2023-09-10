@@ -84,17 +84,22 @@ class YOLODataset(torch.utils.data.Dataset):
         all_poses = []
 
         # read all the images
-        img_count = 6
-        for i in range(img_count):
-            img_path = os.path.join(root_dir, "image_{:04d}.png".format(i))
-            img = imageio.imread(img_path)[..., :3]
+        img_count = 0
+        while True:
+            try:
+                img_path = os.path.join(root_dir, "image_{:04d}.png".format(img_count))
+                img = imageio.imread(img_path)[..., :3]
 
-            # scale the image
-            img = cv2.resize(img, (0, 0), fx=self.image_size, fy=self.image_size)
+                # scale the image
+                img = cv2.resize(img, (0, 0), fx=self.image_size, fy=self.image_size)
 
-            # turn the image into tensor
-            img_tensor = self.image_to_tensor(img)
-            all_imgs.append(img_tensor)
+                # turn the image into tensor
+                img_tensor = self.image_to_tensor(img)
+                all_imgs.append(img_tensor)
+
+                img_count += 1
+            except:
+                break
 
         # read all the poses
         for i in range(img_count):
