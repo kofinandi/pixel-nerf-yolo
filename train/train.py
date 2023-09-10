@@ -356,5 +356,19 @@ if __name__ == '__main__':
     while True:
         print('Restarting training')
         args.resume = False
+
+        # TODO: maybe move this inside the trainer class
+        net = make_model(conf["model"]).to(device=device)
+        net.stop_encoder_grad = args.freeze_enc
+        if args.freeze_enc:
+            print("Encoder frozen")
+            net.encoder.eval()
+
+        renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp, ).to(
+            device=device
+        )
+
+        render_par = renderer.bind_parallel(net, args.gpu_id).eval()
+
         trainer = PixelNeRFTrainer()
         trainer.start()
