@@ -60,6 +60,9 @@ class YOLODataset(torch.utils.data.Dataset):
         self._coord_trans_world = torch.tensor(
             [[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=torch.float32
         )
+        self._coord_trans_cam = torch.tensor(
+            [[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=torch.float32
+        )
 
         self.z_near = z_near
         self.z_far = z_far
@@ -100,6 +103,7 @@ class YOLODataset(torch.utils.data.Dataset):
             pose = (
                     self._coord_trans_world
                     @ torch.tensor(pose, dtype=torch.float32)
+                    @ self._coord_trans_cam
             )
             all_poses.append(pose)
 
