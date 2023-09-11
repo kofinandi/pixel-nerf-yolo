@@ -66,7 +66,7 @@ class ResnetFC(nn.Module):
     def __init__(
         self,
         d_in,
-        d_out=4,
+        d_out,
         n_blocks=5,
         d_latent=0,
         d_hidden=128,
@@ -98,6 +98,9 @@ class ResnetFC(nn.Module):
         self.d_in = d_in
         self.d_out = d_out
         self.d_hidden = d_hidden
+
+        print('n_blocks:', n_blocks)
+        print('d_out:', d_out)
 
         self.combine_layer = combine_layer
         self.combine_type = combine_type
@@ -188,6 +191,7 @@ class ResnetFC(nn.Module):
         # PyHocon construction
         return cls(
             d_in,
+            d_out=conf.get_int("d_out", 4),
             n_blocks=conf.get_int("n_blocks", 5),
             d_hidden=conf.get_int("d_hidden", 128),
             beta=conf.get_float("beta", 0.0),

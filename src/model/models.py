@@ -65,19 +65,17 @@ class PixelNeRFNet(torch.nn.Module):
             self.global_latent_size = self.global_encoder.latent_size
             d_latent += self.global_latent_size
 
-        d_out = 4
-
         self.latent_size = self.encoder.latent_size
-        self.mlp_coarse = make_mlp(conf["mlp_coarse"], d_in, d_latent, d_out=d_out)
+        self.mlp_coarse = make_mlp(conf["mlp_coarse"], d_in, d_latent)
         self.mlp_fine = make_mlp(
-            conf["mlp_fine"], d_in, d_latent, d_out=d_out, allow_empty=True
+            conf["mlp_fine"], d_in, d_latent, allow_empty=True
         )
         # Note: this is world -> camera, and bottom row is omitted
         self.register_buffer("poses", torch.empty(1, 3, 4), persistent=False)
         self.register_buffer("image_shape", torch.empty(2), persistent=False)
 
         self.d_in = d_in
-        self.d_out = d_out
+        self.d_out = conf["mlp_coarse"].get_int("d_out")
         self.d_latent = d_latent
         self.register_buffer("focal", torch.empty(1, 2), persistent=False)
         # Principal point
@@ -255,7 +253,7 @@ class PixelNeRFNet(torch.nn.Module):
                 )
 
             # Interpret the output
-            mlp_output = mlp_output.reshape(-1, B, self.d_out)
+            mlp_output = mlp_output.reshape(-1, B, self.d_out) # TODO: change this if needed
 
             rgb = mlp_output[..., :3]
             sigma = mlp_output[..., 3:4]
