@@ -12,7 +12,7 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 import train_util
-import render_util
+from render import render_util
 from model import make_model, loss
 from data import get_split_dataset
 import util
