@@ -11,9 +11,9 @@ sys.path.insert(
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
-import trainlib
+import train_util
+import render_util
 from model import make_model, loss
-from render import NeRFRenderer
 from data import get_split_dataset
 import util
 
@@ -50,6 +50,7 @@ def extra_args(parser):
     )
     return parser
 
+
 if __name__ == '__main__':
     args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=128)
     device = util.get_cuda(args.gpu_id[0])
@@ -59,40 +60,23 @@ if __name__ == '__main__':
         "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
     )
 
-    net = make_model(conf["model"]).to(device=device)
-    net.stop_encoder_grad = args.freeze_enc
-    if args.freeze_enc:
-        print("Encoder frozen")
-        net.encoder.eval()
-
-    renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp,).to(
-        device=device
-    )
-
-    # Parallize
-    render_par = renderer.bind_parallel(net, args.gpu_id).eval()
-
-    nviews = list(map(int, args.nviews.split()))
-
-    trainer = trainlib.PixelNeRFTrainer(args, conf, dset, val_dset, net, renderer, render_par, nviews, device)
-    trainer.start()
-
     while True:
-        print('Restarting training')
-        args.resume = False
-
-        # TODO: maybe move this inside the trainer class
         net = make_model(conf["model"]).to(device=device)
         net.stop_encoder_grad = args.freeze_enc
         if args.freeze_enc:
             print("Encoder frozen")
             net.encoder.eval()
 
-        renderer = NeRFRenderer.from_conf(conf["renderer"], lindisp=dset.lindisp, ).to(
-            device=device
-        )
+        renderer = render_util.make_renderer(conf["renderer"], lindisp=dset.lindisp,).to(device=device)
 
+        # Parallelize
         render_par = renderer.bind_parallel(net, args.gpu_id).eval()
 
-        trainer = trainlib.PixelNeRFTrainer(args, conf, dset, val_dset, net, renderer, render_par, nviews, device)
+        nviews = list(map(int, args.nviews.split()))
+
+        trainer = train_util.make_trainer(args, conf, dset, val_dset, net, renderer, render_par, nviews, device)
         trainer.start()
+
+        print('Restarting training')
+        args.resume = False
+
