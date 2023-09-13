@@ -37,6 +37,8 @@ class YoloTrainer(trainlib.Trainer):
         self.cell_width = conf["yolo.cell_width"]
         self.cell_height = conf["yolo.cell_height"]
 
+        self.ray_batch_size = args.ray_batch_size
+
     def extra_save_state(self):
         torch.save(self.renderer.state_dict(), self.renderer_state_path)
 
@@ -45,45 +47,100 @@ class YoloTrainer(trainlib.Trainer):
 
         all_images = data["images"].to(device=self.device)
         all_poses = data["poses"].to(device=self.device)
-        all_objects = data["objects"].to(device=self.device)
+        all_bboxes = data["bboxes"].to(device=self.device)
         focal = torch.tensor([data["focal"], data["focal"]], device=self.device)
         c = torch.tensor([data["c"], data["c"]], device=self.device)
 
+        # TODO: get the number of views from a different array
         SB, NV, _, H, W = all_images.shape
 
+        # TODO: use cell sizes correctly
         # scale the height and width of the images by the cell height and width
-        H = H // self.cell_height
-        W = W // self.cell_width
+        H_scaled = H // self.cell_height
+        W_scaled = W // self.cell_width
         # scale the focal and c by the cell height and width
-        focal = focal / [self.cell_width, self.cell_height]
-        c = c / [self.cell_width, self.cell_height]
+        focal_scaled = focal / [self.cell_width, self.cell_height]
+        c_scaled = c / [self.cell_width, self.cell_height]
 
-        # TODO: get the number of views from a different array
+        all_bboxes_gt = []
+        all_rays = []
 
         curr_nviews = self.nviews[torch.randint(0, len(self.nviews), ()).item()]
         if curr_nviews == 1:
             image_ord = torch.randint(0, NV, (SB, 1))
         else:
             image_ord = torch.empty((SB, curr_nviews), dtype=torch.long)
+
+        # loop through the objects in the batch
         for obj_idx in range(SB):
-            images = all_images[obj_idx]  # (NV, 3, H, W)
             poses = all_poses[obj_idx]  # (NV, 4, 4)
+            bboxes = all_bboxes[obj_idx]  # (NV, H_scaled, W_scaled, anchors, 7)
+
+            # randomly select the views to use (encode) for this object
             if curr_nviews > 1:
                 image_ord[obj_idx] = torch.from_numpy(
                     np.random.choice(NV, curr_nviews, replace=False)
                 )
 
-            # TODO: get the ground truth bounding boxes from the dataset
-
+            # generate all the rays for all the views
             cam_rays = util.gen_rays(
-                poses, W, H, focal, self.z_near, self.z_far, c=c
-            )  # (NV, H, W, 8)
+                poses, W_scaled, H_scaled, focal_scaled, self.z_near, self.z_far, c=c_scaled
+            )  # (NV, H_scaled, W_scaled, 8)
+
+            assert cam_rays.shape == (NV, H_scaled, W_scaled, 8)
+
+            # reshape the rays
+            cam_rays = cam_rays.reshape(-1, 8)  # (NV*H_scaled*W_scaled, 8)
+
+            # reshape the bbox ground truth
+            bbox_gt_all = bboxes.reshape(-1, 7)  # (NV*H_scaled*W_scaled*anchors, 7)
+
+
+            # TODO: this is not a good way (either sample all or sample the one that have objects)
+            # select random rays to render
+            pix_inds = torch.randint(0, NV * H_scaled * W_scaled, (self.ray_batch_size,))
+
+            rays = cam_rays[pix_inds]  # (ray_batch_size, 8)
+            bbox_gt = bbox_gt_all[pix_inds]  # (ray_batch_size, 7)
+
+            # append the rays and bbox ground truth to the list
+            all_rays.append(rays)
+            all_bboxes_gt.append(bbox_gt)
+
+        all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
+        all_bboxes_gt = torch.stack(all_bboxes_gt)  # (SB, ray_batch_size, 7)
+
+        image_ord = image_ord.to(self.device)
+        src_images = util.batched_index_select_nd(
+            all_images, image_ord
+        )  # (SB, NS, 3, H, W)
+        src_poses = util.batched_index_select_nd(all_poses, image_ord)  # (SB, NS, 4, 4)
+
+        self.net.encode(
+            src_images,
+            src_poses,
+            focal=focal_scaled.repeat(SB, curr_nviews, 1),
+            c=c_scaled.repeat(SB, curr_nviews, 1),
+        )
+
+        render = self.render_par(all_rays)
+
+        # TODO: get the anchors
+        loss = self.yolo_loss(render, all_bboxes_gt, self.net.anchors)
+
+        if is_train:
+            loss.backward()
+
+        return loss.item()
 
     def train_step(self, data):
-        print("train_step")
+        return self.calc_losses(data, is_train=True)
 
     def eval_step(self, data):
-        print("eval_step")
+        self.renderer.eval()
+        losses = self.calc_losses(data, is_train=False)
+        self.renderer.train()
+        return losses
 
     def vis_step(self, data):
         print("vis_step")
