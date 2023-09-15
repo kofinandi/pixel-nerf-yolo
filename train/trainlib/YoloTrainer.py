@@ -34,10 +34,12 @@ class YoloTrainer(trainlib.Trainer):
         self.z_near = dset.z_near
         self.z_far = dset.z_far
 
-        self.cell_width = conf["yolo.cell_width"]
-        self.cell_height = conf["yolo.cell_height"]
+        self.num_scales = conf["yolo.num_scales"]
+        self.num_anchors_per_scale = conf["yolo.num_anchors_per_scale"]
+        self.cell_sizes = conf["yolo.cell_sizes"][:self.num_scales]
+        self.anchors = conf["yolo.anchors"][:self.num_scales]
 
-        self.ray_batch_size = args.ray_batch_size
+        self.ray_batch_size = conf["yolo.ray_batch_size"]
 
     def extra_save_state(self):
         torch.save(self.renderer.state_dict(), self.renderer_state_path)
@@ -45,22 +47,14 @@ class YoloTrainer(trainlib.Trainer):
     def calc_losses(self, data, is_train=True):
         assert "images" in data
 
-        all_images = data["images"].to(device=self.device)
-        all_poses = data["poses"].to(device=self.device)
-        all_bboxes = data["bboxes"].to(device=self.device)
-        focal = torch.tensor([data["focal"], data["focal"]], device=self.device)
-        c = torch.tensor([data["c"], data["c"]], device=self.device)
+        all_images = data["images"].to(device=self.device)  # (SB, NV, 3, H, W)
+        all_poses = data["poses"].to(device=self.device)  # (SB, NV, 4, 4)
+        all_bboxes = data["bboxes"].to(device=self.device)  # (SB, num_scales, NV, H_scaled, W_scaled, anchors, 7)
+        all_focals = data["focal"].to(device=self.device)  # (SB, 2)
+        all_c = data["c"].to(device=self.device)  # (SB, 2)
 
         # TODO: get the number of views from a different array
         SB, NV, _, H, W = all_images.shape
-
-        # TODO: use cell sizes correctly
-        # scale the height and width of the images by the cell height and width
-        H_scaled = H // self.cell_height
-        W_scaled = W // self.cell_width
-        # scale the focal and c by the cell height and width
-        focal_scaled = focal / [self.cell_width, self.cell_height]
-        c_scaled = c / [self.cell_width, self.cell_height]
 
         all_bboxes_gt = []
         all_rays = []
@@ -72,43 +66,51 @@ class YoloTrainer(trainlib.Trainer):
             image_ord = torch.empty((SB, curr_nviews), dtype=torch.long)
 
         # loop through the objects in the batch
-        for obj_idx in range(SB):
-            poses = all_poses[obj_idx]  # (NV, 4, 4)
-            bboxes = all_bboxes[obj_idx]  # (NV, H_scaled, W_scaled, anchors, 7)
+        for scene_idx in range(SB):
+            poses = all_poses[scene_idx]  # (NV, 4, 4)
+            bboxes = all_bboxes[scene_idx]  # (NV, H_scaled, W_scaled, anchors, 7)
+            focal = all_focals[scene_idx]  # (2)
+            c = all_c[scene_idx]  # (2)
 
             # randomly select the views to use (encode) for this object
             if curr_nviews > 1:
-                image_ord[obj_idx] = torch.from_numpy(
+                image_ord[scene_idx] = torch.from_numpy(
                     np.random.choice(NV, curr_nviews, replace=False)
                 )
 
-            # generate all the rays for all the views
-            cam_rays = util.gen_rays(
-                poses, W_scaled, H_scaled, focal_scaled, self.z_near, self.z_far, c=c_scaled
-            )  # (NV, H_scaled, W_scaled, 8)
+            for scale_idx in range(self.num_scales):
+                # scale the height and width of the images by cell size
+                H_scaled = H // self.cell_sizes[scale_idx]
+                W_scaled = W // self.cell_sizes[scale_idx]
+                # scale the focal and c by the cell size
+                focal_scaled = focal / self.cell_sizes[scale_idx]
+                c_scaled = c / self.cell_sizes[scale_idx]
 
-            assert cam_rays.shape == (NV, H_scaled, W_scaled, 8)
+                # generate all the rays for all the views
+                cam_rays = util.gen_rays(
+                    poses, W_scaled, H_scaled, focal_scaled, self.z_near, self.z_far, c=c_scaled
+                )  # (NV, H_scaled, W_scaled, 8)
 
-            # reshape the rays
-            cam_rays = cam_rays.reshape(-1, 8)  # (NV*H_scaled*W_scaled, 8)
+                assert cam_rays.shape == (NV, H_scaled, W_scaled, 8)
 
-            # reshape the bbox ground truth
-            bbox_gt_all = bboxes.reshape(-1, 7)  # (NV*H_scaled*W_scaled*anchors, 7)
+                # reshape the rays
+                cam_rays = cam_rays.reshape(-1, 8)  # (NV*H_scaled*W_scaled, 8)
 
+                # reshape the bbox ground truth
+                bbox_gt_all = bboxes.reshape(-1, self.num_anchors_per_scale, 7)  # (NV*H_scaled*W_scaled, num_anchors_per_scale, 7)
 
-            # TODO: this is not a good way (either sample all or sample the one that have objects)
-            # select random rays to render
-            pix_inds = torch.randint(0, NV * H_scaled * W_scaled, (self.ray_batch_size,))
+                # select random rays to render
+                pix_inds = torch.randint(0, NV * H_scaled * W_scaled, (self.ray_batch_size,))
 
-            rays = cam_rays[pix_inds]  # (ray_batch_size, 8)
-            bbox_gt = bbox_gt_all[pix_inds]  # (ray_batch_size, 7)
+                rays = cam_rays[pix_inds]  # (ray_batch_size, 8)
+                bbox_gt = bbox_gt_all[pix_inds]  # (ray_batch_size, num_anchors_per_scale, 7)
 
-            # append the rays and bbox ground truth to the list
-            all_rays.append(rays)
-            all_bboxes_gt.append(bbox_gt)
+                # append the rays and bbox ground truth to the list
+                all_rays.append(rays)
+                all_bboxes_gt.append(bbox_gt)
 
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
-        all_bboxes_gt = torch.stack(all_bboxes_gt)  # (SB, ray_batch_size, 7)
+        all_bboxes_gt = torch.stack(all_bboxes_gt)  # (SB, ray_batch_size, num_anchors_per_scale, 7)
 
         image_ord = image_ord.to(self.device)
         src_images = util.batched_index_select_nd(
@@ -119,14 +121,13 @@ class YoloTrainer(trainlib.Trainer):
         self.net.encode(
             src_images,
             src_poses,
-            focal=focal_scaled.repeat(SB, curr_nviews, 1),
-            c=c_scaled.repeat(SB, curr_nviews, 1),
+            all_focals,
+            c=all_c,
         )
 
         render = self.render_par(all_rays)
 
-        # TODO: get the anchors
-        loss = self.yolo_loss(render, all_bboxes_gt, self.net.anchors)
+        loss = self.yolo_loss(render, all_bboxes_gt, self.anchors)
 
         if is_train:
             loss.backward()

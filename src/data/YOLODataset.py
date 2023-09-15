@@ -12,7 +12,6 @@ class YOLODataset(torch.utils.data.Dataset):
             self,
             path,
             stage="train",
-            image_size=0.25,
             z_near=1.2,
             z_far=4.0,
             conf=None,
@@ -21,7 +20,6 @@ class YOLODataset(torch.utils.data.Dataset):
         :param path dataset root path, contains metadata.yml
         :param stage train | val | test
         :param list_prefix prefix for split lists: <list_prefix>[train, val, test].lst
-        :param image_size result image size (resizes if different); None to keep original size
         :param sub_format shapenet | dtu dataset sub-type.
         :param scale_focal if true, assume focal length is specified for
         image of side length 2 instead of actual image size. This is used
@@ -56,7 +54,7 @@ class YOLODataset(torch.utils.data.Dataset):
             "objs",
         )
 
-        self.image_size = image_size
+        self.image_scale = conf["image_scale"]
         self._coord_trans_world = torch.tensor(
             [[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=torch.float32
         )
@@ -67,10 +65,10 @@ class YOLODataset(torch.utils.data.Dataset):
         self.z_near = z_near
         self.z_far = z_far
 
-        self.cell_sizes = conf["yolo.cell_sizes"]
-
-        # TODO: self.anchors
-        # TODO: self.num_anchors_per_scale
+        self.num_scales = conf["yolo.num_scales"]
+        self.num_anchors_per_scale = conf["yolo.num_anchors_per_scale"]
+        self.cell_sizes = conf["yolo.cell_sizes"][:self.num_scales]
+        self.anchors = conf["yolo.anchors"][:self.num_scales]
 
     def __len__(self):
         return len(self.all_objs)
@@ -96,7 +94,7 @@ class YOLODataset(torch.utils.data.Dataset):
                 img = imageio.imread(img_path)[..., :3]
 
                 # scale the image
-                img = cv2.resize(img, (0, 0), fx=self.image_size, fy=self.image_size)
+                img = cv2.resize(img, (0, 0), fx=self.image_scale, fy=self.image_scale)
 
                 # turn the image into tensor
                 img_tensor = self.image_to_tensor(img)
@@ -119,19 +117,20 @@ class YOLODataset(torch.utils.data.Dataset):
 
         # read all the bounding boxes
         for i in range(img_count):
-            bboxes = np.loadtxt(fname=os.path.join(root_dir, "projected_bboxes_{:04d}.txt"), delimiter=" ", ndmin=2)
-            # TODO: use all scales or remove the other scales
-            all_bboxes.append(self._get_all_bboxes(bboxes, all_imgs[i].shape[0], all_imgs[i].shape[1])[0])
+            bboxes = np.roll(
+                np.loadtxt(fname=os.path.join(root_dir, "projected_bboxes_{:04d}.txt"), delimiter=" ", ndmin=2), 4,
+                axis=1).tolist()
+            all_bboxes.append(self._get_all_bboxes(bboxes, all_imgs[i].shape[0], all_imgs[i].shape[1]))
 
         intrinsic_path = os.path.join(root_dir, "intrinsic_0000.npy")
         intrinsic = np.load(intrinsic_path)
 
         # the focal can be read from the intrinsic npy file which are the same for all images
-        focal = intrinsic[0, 0] * self.image_size
+        focal = intrinsic[0, 0] * self.image_scale
         focal = torch.tensor((focal, focal), dtype=torch.float32)
 
         # the camera center can be read from the intrinsic npy file which are the same for all images
-        c = intrinsic[:2, 2] * self.image_size
+        c = intrinsic[:2, 2] * self.image_scale
         c = torch.tensor(c, dtype=torch.float32)
 
         all_imgs = torch.stack(all_imgs)
@@ -170,7 +169,7 @@ class YOLODataset(torch.utils.data.Dataset):
 
             # At each scale, assigning the bounding box to the
             # best matching anchor box
-            has_anchor = [False] * 3
+            has_anchor = [False] * self.num_scales
             for anchor_idx in anchor_indices:
                 scale_idx = anchor_idx // self.num_anchors_per_scale
                 anchor_on_scale = anchor_idx % self.num_anchors_per_scale

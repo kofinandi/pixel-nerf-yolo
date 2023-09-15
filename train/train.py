@@ -70,7 +70,7 @@ if __name__ == '__main__':
         renderer = render_util.make_renderer(conf["renderer"], lindisp=dset.lindisp,).to(device=device)
 
         # Parallelize
-        render_par = renderer.bind_parallel(net, args.gpu_id).eval()
+        render_par = renderer.bind_parallel(net, args.gpu_id).eval()  # TODO: eval?
 
         nviews = list(map(int, args.nviews.split()))
 

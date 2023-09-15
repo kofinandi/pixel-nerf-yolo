@@ -56,7 +56,7 @@ class YoloRenderer(torch.nn.Module):
         # TODO: maybe this needs a different activation function?
         probabilities = torch.sigmoid(out[..., 0])  # (B, K)
 
-        # TODO: should we divide by K?
+        # TODO: activation function?
         final_values = torch.sum(out[..., 1:] * probabilities.unsqueeze(-1), dim=1) / K  # (B, 6)
         final_probabilities = torch.sum(probabilities, dim=1) / K  # (B)
 
