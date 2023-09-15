@@ -54,7 +54,7 @@ class YOLODataset(torch.utils.data.Dataset):
             "objs",
         )
 
-        self.image_scale = conf["image_scale"]
+        self.image_scale = conf["yolo.image_scale"]
         self._coord_trans_world = torch.tensor(
             [[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=torch.float32
         )
@@ -66,9 +66,12 @@ class YOLODataset(torch.utils.data.Dataset):
         self.z_far = z_far
 
         self.num_scales = conf["model.mlp_coarse.num_scales"]
-        self.num_anchors_per_scale = conf["yolo.num_anchors_per_scale"]
+        self.num_anchors_per_scale = conf["model.mlp_coarse.num_anchors_per_scale"]
         self.cell_sizes = conf["yolo.cell_sizes"][:self.num_scales]
-        self.anchors = conf["yolo.anchors"][:self.num_scales]
+        anchors = conf["yolo.anchors"][:self.num_scales]
+        # flatten the anchors
+        self.anchors = torch.tensor([item for sublist in anchors for item in sublist])
+        self.ignore_iou_thresh = conf["yolo.ignore_iou_thresh"]
 
     def __len__(self):
         return len(self.all_objs)
@@ -118,9 +121,9 @@ class YOLODataset(torch.utils.data.Dataset):
         # read all the bounding boxes
         for i in range(img_count):
             bboxes = np.roll(
-                np.loadtxt(fname=os.path.join(root_dir, "projected_bboxes_{:04d}.txt"), delimiter=" ", ndmin=2), 4,
+                np.loadtxt(fname=os.path.join(root_dir, "projected_bboxes_{:04d}.txt".format(i)), delimiter=" ", ndmin=2), 4,
                 axis=1).tolist()
-            all_bboxes.append(self._get_all_bboxes(bboxes, all_imgs[i].shape[0], all_imgs[i].shape[1]))
+            all_bboxes.append(self._get_all_bboxes(bboxes, all_imgs[i].shape[1], all_imgs[i].shape[2]))
 
         intrinsic_path = os.path.join(root_dir, "intrinsic_0000.npy")
         intrinsic = np.load(intrinsic_path)
@@ -165,7 +168,7 @@ class YOLODataset(torch.utils.data.Dataset):
                                    is_pred=False)
             # Selecting the best anchor box
             anchor_indices = iou_anchors.argsort(descending=True, dim=0)
-            x, y, width, height, class_label = box
+            x, y, box_width, box_height, class_label = box
 
             # At each scale, assigning the bounding box to the
             # best matching anchor box
@@ -175,7 +178,7 @@ class YOLODataset(torch.utils.data.Dataset):
                 anchor_on_scale = anchor_idx % self.num_anchors_per_scale
 
                 # Identifying the grid size for the scale
-                (s_h, s_w) = self.grid_sizes[scale_idx]
+                (s_h, s_w) = (height // self.cell_sizes[scale_idx], width // self.cell_sizes[scale_idx])
 
                 # Identifying the cell to which the bounding box belongs
                 i, j = int(s_h * y), int(s_w * x)
@@ -193,7 +196,7 @@ class YOLODataset(torch.utils.data.Dataset):
 
                     # Calculating the width and height of the bounding box
                     # relative to the cell
-                    width_cell, height_cell = (width * s_w, height * s_h)
+                    width_cell, height_cell = (box_width * s_w, box_height * s_h)
 
                     # Indentify the box coordinates
                     box_coordinates = torch.tensor(

@@ -64,16 +64,16 @@ class ResnetBlockFC(nn.Module):
 
 class ResnetFC(nn.Module):
     def __init__(
-        self,
-        d_in,
-        d_out,
-        n_blocks=5,
-        d_latent=0,
-        d_hidden=128,
-        beta=0.0,
-        combine_layer=1000,
-        combine_type="average",
-        use_spade=False,
+            self,
+            d_in,
+            d_out,
+            n_blocks=5,
+            d_latent=0,
+            d_hidden=128,
+            beta=0.0,
+            combine_layer=1000,
+            combine_type="average",
+            use_spade=False,
     ):
         """
         :param d_in input size
@@ -143,7 +143,7 @@ class ResnetFC(nn.Module):
             assert zx.size(-1) == self.d_latent + self.d_in
             if self.d_latent > 0:
                 z = zx[..., : self.d_latent]
-                x = zx[..., self.d_latent :]
+                x = zx[..., self.d_latent:]
             else:
                 x = zx
             if self.d_in > 0:
@@ -189,9 +189,13 @@ class ResnetFC(nn.Module):
     @classmethod
     def from_conf(cls, conf, d_in, **kwargs):
         # PyHocon construction
+        if not conf.get_bool("yolo", False):
+            d_out = conf.get_int("d_out", 4)
+        else:
+            d_out = conf.get_int("d_out", 7) * conf.get_int("num_anchors_per_scale", 3)
         return cls(
             d_in,
-            d_out=conf.get_int("d_out", 4) if conf.get_bool("yolo", False) else (conf.get_int("d_out", 7) * conf.get_int("num_scales", 1)),
+            d_out=d_out,
             n_blocks=conf.get_int("n_blocks", 5),
             d_hidden=conf.get_int("d_hidden", 128),
             beta=conf.get_float("beta", 0.0),

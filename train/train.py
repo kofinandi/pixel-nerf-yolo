@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
     dset, val_dset, _ = get_split_dataset(args.dataset_format, args.datadir, conf=conf)
     print(
-        "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp)
+        "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp if hasattr(dset, "lindisp") else "N/A")
     )
 
     while True:
@@ -67,7 +67,7 @@ if __name__ == '__main__':
             print("Encoder frozen")
             net.encoder.eval()
 
-        renderer = render_util.make_renderer(conf["renderer"], lindisp=dset.lindisp,).to(device=device)
+        renderer = render_util.make_renderer(conf["renderer"], lindisp=dset.lindisp if hasattr(dset, "lindisp") else None,).to(device=device)
 
         # Parallelize
         render_par = renderer.bind_parallel(net, args.gpu_id).eval()  # TODO: eval?

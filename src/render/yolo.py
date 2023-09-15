@@ -31,17 +31,19 @@ class YoloRenderer(torch.nn.Module):
         )
 
     def forward(self, rays):
+        rays = rays.reshape(-1, 8)  # (SB * B, 8)
+
         z_samp = self.sample_coarse(rays)
 
         B, K = z_samp.shape
 
         points = rays[:, None, :3] + z_samp.unsqueeze(2) * rays[:, None, 3:6]  # (B, K, 3)
-        points = points.reshape(-1, 3)  # (B*K, 3)
+        points = points.reshape(1, -1, 3)  # (1, B*K, 3)
 
         split_points = torch.split(points, self.eval_batch_size, dim=0)
 
         viewdirs = rays[:, None, 3:6].expand(-1, K, -1)  # (B, K, 3)
-        viewdirs = viewdirs.reshape(-1, 3)  # (B*K, 3)
+        viewdirs = viewdirs.reshape(1, -1, 3)  # (1, B*K, 3)
 
         split_viewdirs = torch.split(viewdirs, self.eval_batch_size, dim=0)
 
@@ -51,7 +53,12 @@ class YoloRenderer(torch.nn.Module):
             val_all.append(self.net(pnts, coarse=True, viewdirs=dirs))
 
         out = torch.cat(val_all, dim=0)
-        out = out.reshape(B, K, -1)  # (B, K, 7)
+        out = out.reshape(B, K, -1)  # (B, K, num_anchors_per_scale*7)
+
+        # vissza kell alakitani erre a formara
+        # reshape the render to be (SB * num_scales, ray_batch_size, num_anchors_per_scale, 7)
+        # render = render.reshape(SB * self.num_scales, self.ray_batch_size, self.num_anchors_per_scale, 7)
+        # ezutan alkalmazni az aktivaciot
 
         # TODO: maybe this needs a different activation function?
         probabilities = torch.sigmoid(out[..., 0])  # (B, K)
@@ -59,6 +66,8 @@ class YoloRenderer(torch.nn.Module):
         # TODO: activation function?
         final_values = torch.sum(out[..., 1:] * probabilities.unsqueeze(-1), dim=1) / K  # (B, 6)
         final_probabilities = torch.sum(probabilities, dim=1) / K  # (B)
+
+        # itt ujra ossze kell oket egybe rakni
 
         return final_values, final_probabilities
 

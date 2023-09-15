@@ -75,7 +75,11 @@ class PixelNeRFNet(torch.nn.Module):
         self.register_buffer("image_shape", torch.empty(2), persistent=False)
 
         self.d_in = d_in
-        self.d_out = conf["mlp_coarse"].get_int("d_out")
+        if not conf.get_bool("mlp_coarse.yolo", False):
+            self.d_out = conf.get_int("mlp_coarse.d_out", 4)
+        else:
+            self.d_out = conf.get_int("mlp_coarse.d_out", 7) * conf.get_int("mlp_coarse.num_anchors_per_scale", 3)
+        self.yolo = conf.get_bool("mlp_coarse.yolo", False)
         self.d_latent = d_latent
         self.register_buffer("focal", torch.empty(1, 2), persistent=False)
         # Principal point
@@ -254,6 +258,9 @@ class PixelNeRFNet(torch.nn.Module):
 
             # Interpret the output
             mlp_output = mlp_output.reshape(-1, B, self.d_out) # TODO: change this if needed
+
+            if self.yolo:
+                return mlp_output
 
             rgb = mlp_output[..., :3]
             sigma = mlp_output[..., 3:4]
