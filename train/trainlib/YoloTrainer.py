@@ -34,7 +34,7 @@ class YoloTrainer(trainlib.Trainer):
         self.z_near = dset.z_near
         self.z_far = dset.z_far
 
-        self.num_scales = conf["yolo.num_scales"]
+        self.num_scales = conf["model.mlp_coarse.num_scales"]
         self.num_anchors_per_scale = conf["yolo.num_anchors_per_scale"]
         self.cell_sizes = conf["yolo.cell_sizes"][:self.num_scales]
         self.anchors = conf["yolo.anchors"][:self.num_scales]

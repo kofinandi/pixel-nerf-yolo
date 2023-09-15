@@ -26,6 +26,7 @@ class DVRDataset(torch.utils.data.Dataset):
         z_near=1.2,
         z_far=4.0,
         skip_step=None,
+        conf=None,
     ):
         """
         :param path dataset root path, contains metadata.yml

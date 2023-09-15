@@ -191,7 +191,7 @@ class ResnetFC(nn.Module):
         # PyHocon construction
         return cls(
             d_in,
-            d_out=conf.get_int("d_out", 4),
+            d_out=conf.get_int("d_out", 4) if conf.get_bool("yolo", False) else (conf.get_int("d_out", 7) * conf.get_int("num_scales", 1)),
             n_blocks=conf.get_int("n_blocks", 5),
             d_hidden=conf.get_int("d_hidden", 128),
             beta=conf.get_float("beta", 0.0),
