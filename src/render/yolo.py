@@ -1,11 +1,13 @@
 import torch
 
 class YoloRenderer(torch.nn.Module):
-    def __init__(self, n_coarse, eval_batch_size):
+    def __init__(self, n_coarse, eval_batch_size, num_scales, num_anchors_per_scale):
         super().__init__()
         self.net = None
         self.n_coarse = n_coarse
         self.eval_batch_size = eval_batch_size
+        self.num_scales = num_scales
+        self.num_anchors_per_scale = num_anchors_per_scale
 
     def bind_net(self, net):
         self.net = net
@@ -26,8 +28,10 @@ class YoloRenderer(torch.nn.Module):
     @classmethod
     def from_conf(cls, conf):
         return cls(
-            conf.get_int("n_coarse", 128),
-            conf.get_int("eval_batch_size", 1024),
+            conf.get_int("renderer.n_coarse", 128),
+            conf.get_int("renderer.eval_batch_size", 1024),
+            conf.get_int("model.mlp_coarse.num_scales", 1),
+            conf.get_int("model.mlp_coarse.num_anchors_per_scale", 3),
         )
 
     def forward(self, rays):
@@ -55,21 +59,21 @@ class YoloRenderer(torch.nn.Module):
         out = torch.cat(val_all, dim=0)
         out = out.reshape(B, K, -1)  # (B, K, num_anchors_per_scale*7)
 
-        # vissza kell alakitani erre a formara
-        # reshape the render to be (SB * num_scales, ray_batch_size, num_anchors_per_scale, 7)
-        # render = render.reshape(SB * self.num_scales, self.ray_batch_size, self.num_anchors_per_scale, 7)
-        # ezutan alkalmazni az aktivaciot
+        # reshape the render to be (B, K, num_anchors_per_scale, 7)
+        out = out.reshape(B, K, self.num_anchors_per_scale, 7)
 
         # TODO: maybe this needs a different activation function?
-        probabilities = torch.sigmoid(out[..., 0])  # (B, K)
+        probabilities = torch.sigmoid(out[..., 0])  # (B, K, num_anchors_per_scale)
 
-        # TODO: activation function?
-        final_values = torch.sum(out[..., 1:] * probabilities.unsqueeze(-1), dim=1) / K  # (B, 6)
-        final_probabilities = torch.sum(probabilities, dim=1) / K  # (B)
+        # multiply the remaining values by the probabilities and sum them up by K
+        final_values = out[..., 1:] * probabilities.unsqueeze(-1)  # (B, K, num_anchors_per_scale, 6)
+        final_values = final_values.sum(dim=1)  # (B, num_anchors_per_scale, 6)
 
-        # itt ujra ossze kell oket egybe rakni
+        # sum up the probabilities
+        final_probabilities = probabilities.sum(dim=1)  # (B, num_anchors_per_scale)
 
-        return final_values, final_probabilities
+        # concatenate the probabilities and the values
+        return torch.cat([final_probabilities.unsqueeze(-1), final_values], dim=-1)  # (B, num_anchors_per_scale, 7)
 
     def bind_parallel(self, net, gpus = None):
         self.net = net

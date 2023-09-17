@@ -103,12 +103,13 @@ def get_rgb_loss(conf, coarse=True, using_bg=False, reduction="mean"):
     )
 
 class YoloLoss(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, num_anchors_per_scale):
         super().__init__()
         self.mse = torch.nn.MSELoss()
         self.bce = torch.nn.BCEWithLogitsLoss()
         self.cross_entropy = torch.nn.CrossEntropyLoss()
         self.sigmoid = torch.nn.Sigmoid()
+        self.num_anchors_per_scale = num_anchors_per_scale
 
     def forward(self, pred, target, anchors):
         # Identifying which cells in target have objects
@@ -122,7 +123,7 @@ class YoloLoss(torch.nn.Module):
         )
 
         # Reshaping anchors to match predictions
-        anchors = anchors.reshape(1, 3, 1, 1, 2)
+        anchors = anchors.reshape(1, 1, self.num_anchors_per_scale, 2)
         # Box prediction confidence
         box_preds = torch.cat([self.sigmoid(pred[..., 1:3]),
                                torch.exp(pred[..., 3:5]) * anchors

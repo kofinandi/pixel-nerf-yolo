@@ -138,6 +138,8 @@ class Trainer:
 
     def start(self):
         def fmt_loss_str(losses):
+            if not isinstance(losses, dict):
+                return "loss " + str(losses)
             return "loss " + (" ".join(k + ":" + str(losses[k]) for k in losses))
 
         def data_loop(dl):

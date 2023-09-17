@@ -3,9 +3,9 @@ from .yolo import YoloRenderer
 
 
 def make_renderer(conf, lindisp=False):
-    renderer_type = conf.get_string("type", "nerf")  # nerf | yolo
+    renderer_type = conf.get_string("renderer.type", "nerf")  # nerf | yolo
     if renderer_type == "nerf":
-        return NeRFRenderer.from_conf(conf, lindisp=lindisp)
+        return NeRFRenderer.from_conf(conf['renderer'], lindisp=lindisp)
     elif renderer_type == "yolo":
         return YoloRenderer.from_conf(conf)
     else:

@@ -23,7 +23,6 @@ class YOLOTrainer(trainlib.Trainer):
             args.name,
         )
 
-        self.yolo_loss = loss.YoloLoss().to(device=device)
 
         if args.resume:
             if os.path.exists(self.renderer_state_path):
@@ -37,9 +36,11 @@ class YOLOTrainer(trainlib.Trainer):
         self.num_scales = conf["model.mlp_coarse.num_scales"]
         self.num_anchors_per_scale = conf["model.mlp_coarse.num_anchors_per_scale"]
         self.cell_sizes = conf["yolo.cell_sizes"][:self.num_scales]
-        self.anchors = conf["yolo.anchors"][:self.num_scales]
+        self.anchors = torch.Tensor(conf["yolo.anchors"][:self.num_scales]).to(device=device)
 
         self.ray_batch_size = conf["yolo.ray_batch_size"]
+
+        self.yolo_loss = loss.YoloLoss(self.num_anchors_per_scale).to(device=device)
 
     def extra_save_state(self):
         torch.save(self.renderer.state_dict(), self.renderer_state_path)
@@ -84,7 +85,7 @@ class YOLOTrainer(trainlib.Trainer):
                 # and get only the bboxes for this scale
                 bboxes_at_scale = []
                 for i in range(len(bboxes)):
-                    bboxes_at_scale.append(bboxes[i][scale_idx])
+                    bboxes_at_scale.append(bboxes[i][scale_idx].to(device=self.device))
 
                 bboxes_at_scale = torch.stack(bboxes_at_scale)  # (NV, 1, anchors_per_scale, H_scaled, W_scaled, 6)
 
@@ -134,7 +135,7 @@ class YOLOTrainer(trainlib.Trainer):
             c=all_c,
         )
 
-        render = self.render_par(all_rays)  # (SB * num_scales, ray_batch_size, num_anchors_per_scale*7)
+        render = self.render_par(all_rays)  # (SB * num_scales * ray_batch_size, num_anchors_per_scale, 7)
 
         # reshape the render to be (SB * num_scales, ray_batch_size, num_anchors_per_scale, 7)
         render = render.reshape(SB * self.num_scales, self.ray_batch_size, self.num_anchors_per_scale, 7)
@@ -149,11 +150,11 @@ class YOLOTrainer(trainlib.Trainer):
     def train_step(self, data, global_step=None):
         return self.calc_losses(data, is_train=True)
 
-    def eval_step(self, data):
+    def eval_step(self, data, global_step=None):
         self.renderer.eval()
         losses = self.calc_losses(data, is_train=False)
         self.renderer.train()
         return losses
 
-    def vis_step(self, data):
+    def vis_step(self, data, global_step=None):
         print("vis_step")
