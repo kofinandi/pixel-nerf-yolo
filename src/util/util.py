@@ -72,7 +72,7 @@ def get_image_to_tensor_balanced(image_size=0):
     if image_size > 0:
         ops.append(transforms.Resize(image_size))
     ops.extend(
-        [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),]
+        [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), ]
     )
     return transforms.Compose(ops)
 
@@ -226,12 +226,12 @@ def bbox_sample(bboxes, num_pix):
     image_ids = torch.randint(0, bboxes.shape[0], (num_pix,))
     pix_bboxes = bboxes[image_ids]
     x = (
-        torch.rand(num_pix) * (pix_bboxes[:, 2] + 1 - pix_bboxes[:, 0])
-        + pix_bboxes[:, 0]
+            torch.rand(num_pix) * (pix_bboxes[:, 2] + 1 - pix_bboxes[:, 0])
+            + pix_bboxes[:, 0]
     ).long()
     y = (
-        torch.rand(num_pix) * (pix_bboxes[:, 3] + 1 - pix_bboxes[:, 1])
-        + pix_bboxes[:, 1]
+            torch.rand(num_pix) * (pix_bboxes[:, 3] + 1 - pix_bboxes[:, 1])
+            + pix_bboxes[:, 1]
     ).long()
     pix = torch.stack((image_ids, y, x), dim=-1)
     return pix
@@ -280,7 +280,7 @@ def gen_rays(poses, width, height, focal, z_near, z_far, c=None, ndc=False):
 
 def trans_t(t):
     return torch.tensor(
-        [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, t], [0, 0, 0, 1],], dtype=torch.float32,
+        [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, t], [0, 0, 0, 1], ], dtype=torch.float32,
     )
 
 
@@ -307,6 +307,7 @@ def rot_theta(th):
         dtype=torch.float32,
     )
 
+
 def rot_kappa(kappa):
     return torch.tensor(
         [
@@ -327,26 +328,28 @@ def pose_spherical(theta, phi, radius):
     c2w = rot_phi(phi / 180.0 * np.pi) @ c2w
     c2w = rot_theta(theta / 180.0 * np.pi) @ c2w
     c2w = (
-        torch.tensor(
-            [[-1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
-            dtype=torch.float32,
-        )
-        @ c2w
+            torch.tensor(
+                [[-1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
+                dtype=torch.float32,
+            )
+            @ c2w
     )
     return c2w
+
 
 def pose_spherical2(theta, kappa, radius):
     c2w = trans_t(radius)
     c2w = rot_kappa(kappa / 180.0 * np.pi) @ c2w
     c2w = rot_theta(theta / 180.0 * np.pi) @ c2w
     c2w = (
-        torch.tensor(
-            [[-1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
-            dtype=torch.float32,
-        )
-        @ c2w
+            torch.tensor(
+                [[-1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
+                dtype=torch.float32,
+            )
+            @ c2w
     )
     return c2w
+
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -377,16 +380,16 @@ def get_norm_layer(norm_type="instance", group_norm_groups=32):
 
 
 def make_conv_2d(
-    dim_in,
-    dim_out,
-    padding_type="reflect",
-    norm_layer=None,
-    activation=None,
-    kernel_size=3,
-    use_bias=False,
-    stride=1,
-    no_pad=False,
-    zero_init=False,
+        dim_in,
+        dim_out,
+        padding_type="reflect",
+        norm_layer=None,
+        activation=None,
+        kernel_size=3,
+        use_bias=False,
+        stride=1,
+        no_pad=False,
+        zero_init=False,
 ):
     conv_block = []
     amt = kernel_size // 2
@@ -626,34 +629,128 @@ def iou(box1, box2, is_pred=True):
         return iou_score
 
 
+# Function to convert cells to bounding boxes
+def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
+    # Batch size used on predictions
+    batch_size = predictions.shape[0]  # (BATCH_SIZE, 3, H, W, 6) or (BATCH_SIZE, 3, H, W, 7)
+    # Number of anchors
+    num_anchors = anchors.shape[1]
+    # List of all the predictions
+    box_predictions = predictions[..., 1:5]
+
+    # If the input is predictions then we will pass the x and y coordinate
+    # through sigmoid function and width and height to exponent function and
+    # calculate the score and best class.
+    if is_predictions:
+        anchors = anchors.reshape(1, num_anchors, 1, 1, 2)
+        box_predictions[..., 0:2] = torch.sigmoid(box_predictions[..., 0:2])
+        box_predictions[..., 2:] = torch.exp(
+            box_predictions[..., 2:]) * anchors
+        scores = torch.sigmoid(predictions[..., 0:1])
+        best_class = torch.argmax(predictions[..., 5:], dim=-1).unsqueeze(-1)
+
+    # Else we will just calculate scores and best class.
+    else:
+        scores = predictions[..., 0:1]
+        best_class = predictions[..., 5:6]
+
+    # Calculate cell indices
+    cell_indices_x = (
+        torch.arange(w)
+        .repeat(predictions.shape[0], num_anchors, h, 1)
+        .unsqueeze(-1)
+        .to(predictions.device)
+    )
+
+    cell_indices_y = (
+        torch.arange(h)
+        .repeat(predictions.shape[0], num_anchors, w, 1)
+        .unsqueeze(-1)
+        .permute(0, 1, 3, 2, 4)
+        .to(predictions.device)
+    )
+
+    # Calculate x, y, width and height with proper scaling
+    x = 1 / w * (box_predictions[..., 0:1] + cell_indices_x)
+    y = 1 / h * (box_predictions[..., 1:2] + cell_indices_y)
+    width_height = 1 / torch.Tensor([w, h]).to(predictions.device) * box_predictions[..., 2:4]
+
+    # Concatinating the values and reshaping them in
+    # (BATCH_SIZE, num_anchors * S * S, 6) shape
+    converted_bboxes = torch.cat(
+        (best_class, scores, x, y, width_height), dim=-1
+    ).reshape(batch_size, num_anchors * h * w, 6)
+
+    # Returning the reshaped and converted bounding box list
+    return converted_bboxes.tolist()
+
+
 # Non-maximum suppression function to remove overlapping bounding boxes
 def nms(bboxes, iou_threshold, threshold):
-	# Filter out bounding boxes with confidence below the threshold.
-	bboxes = [box for box in bboxes if box[1] > threshold]
+    # Filter out bounding boxes with confidence below the threshold.
+    bboxes = [box for box in bboxes if box[1] > threshold]
 
-	# Sort the bounding boxes by confidence in descending order.
-	bboxes = sorted(bboxes, key=lambda x: x[1], reverse=True)
+    # Filter out bounding boxes with width or height to small or to large
+    bboxes = [box for box in bboxes if 10e-4 < box[4] < 10e4 and 10e-4 < box[5] < 10e4]
 
-	# Initialize the list of bounding boxes after non-maximum suppression.
-	bboxes_nms = []
+    # Sort the bounding boxes by confidence in descending order.
+    bboxes = sorted(bboxes, key=lambda x: x[1], reverse=True)
 
-	while bboxes:
-		# Get the first bounding box.
-		first_box = bboxes.pop(0)
+    # Initialize the list of bounding boxes after non-maximum suppression.
+    bboxes_nms = []
 
-		# Iterate over the remaining bounding boxes.
-		for box in bboxes:
-		# If the bounding boxes do not overlap or if the first bounding box has
-		# a higher confidence, then add the second bounding box to the list of
-		# bounding boxes after non-maximum suppression.
-			if box[0] != first_box[0] or iou(
-				torch.tensor(first_box[2:]),
-				torch.tensor(box[2:]),
-			) < iou_threshold:
-				# Check if box is not in bboxes_nms
-				if box not in bboxes_nms:
-					# Add box to bboxes_nms
-					bboxes_nms.append(box)
+    while bboxes:
+        # Get the first bounding box.
+        first_box = bboxes.pop(0)
+        bboxes_nms.append(first_box)
 
-	# Return bounding boxes after non-maximum suppression.
-	return bboxes_nms
+        # Iterate over the remaining bounding boxes.
+        for box in bboxes:
+            # Compare the IOU of the first box with the current box.
+            # If the IOU is higher than the given IOU threshold, remove the box.
+            if iou(torch.tensor(first_box[2:]), torch.tensor(box[2:])) > iou_threshold:
+                bboxes.remove(box)
+
+    return bboxes_nms
+
+
+def draw_bounding_boxes(image, boxes):
+    # Getting 2 different colors from the color map for 2 different classes
+    colors = [(1.0, 0.48, 0.0), (0.0, 0.79, 0.14)]  # RGB format
+
+    # Reading the image with OpenCV
+    img = np.array(image)
+    # Getting the height and width of the image
+    h, w, _ = img.shape
+
+    # Create a copy of the image to draw bounding boxes on
+    output_image = img.copy()
+
+    # Plotting the bounding boxes and labels over the image
+    for box in boxes:
+        # Get the class from the box
+        class_pred = int(box[0])
+        # Get the center x and y coordinates
+        box = box[2:]
+        # Get the upper left corner coordinates
+        upper_left_x = int((box[0] - box[2] / 2) * w)
+        upper_left_y = int((box[1] - box[3] / 2) * h)
+        lower_right_x = int((box[0] + box[2] / 2) * w)
+        lower_right_y = int((box[1] + box[3] / 2) * h)
+
+        # Constrain the bounding boxes to be within the image size
+        upper_left_x = min(max(upper_left_x, 0), w - 1)
+        upper_left_y = min(max(upper_left_y, 0), h - 1)
+        lower_right_x = min(max(lower_right_x, 0), w - 1)
+        lower_right_y = min(max(lower_right_y, 0), h - 1)
+
+        # Draw a rectangle with the bounding box
+        cv2.rectangle(output_image, (upper_left_x, upper_left_y), (lower_right_x, lower_right_y),
+                      colors[class_pred], thickness=1)
+
+        # Add class name to the bounding box
+        class_label = class_pred == 0 and "Human" or "Car"
+        cv2.putText(output_image, class_label, (upper_left_x, upper_left_y - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.25, colors[class_pred], thickness=4)
+
+    return output_image

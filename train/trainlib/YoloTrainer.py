@@ -4,6 +4,7 @@ from model import make_model, loss
 import util
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
 
 class YOLOTrainer(trainlib.Trainer):
@@ -156,5 +157,88 @@ class YOLOTrainer(trainlib.Trainer):
         self.renderer.train()
         return losses
 
-    def vis_step(self, data, global_step=None):
-        print("vis_step")
+    def vis_step(self, data, global_step=None, idx=None):
+        if "images" not in data:
+            return {}
+        if idx is None:
+            batch_idx = np.random.randint(0, data["images"].shape[0])
+        else:
+            print(idx)
+            batch_idx = idx
+
+        all_images = data["images"][batch_idx].to(device=self.device)  # (NV, 3, H, W)
+        all_poses = data["poses"][batch_idx].to(device=self.device)  # (NV, 4, 4)
+        all_bboxes = data["bboxes"]  # NV long list, num_scales long tuple, (1, anchors_per_scale, H_scaled, W_scaled, 6)
+        focal = data["focal"][batch_idx: batch_idx + 1].to(device=self.device)  # (2)
+        c = data["c"][batch_idx: batch_idx + 1].to(device=self.device)  # (2)
+
+        # TODO: get the number of views from a different array
+        NV, _, H, W = all_images.shape
+
+        curr_nviews = self.nviews[torch.randint(0, len(self.nviews), (1,)).item()]
+        views_src = np.sort(np.random.choice(NV, curr_nviews, replace=False))
+        view_dest = np.random.randint(0, NV - curr_nviews)
+        for vs in range(curr_nviews):
+            view_dest += view_dest >= views_src[vs]
+        views_src = torch.from_numpy(views_src)
+
+        # TODO: use all the scales
+        H_scaled = H // self.cell_sizes[0]
+        W_scaled = W // self.cell_sizes[0]
+        # scale the focal and c by the cell size
+        focal_scaled = focal / self.cell_sizes[0]
+        c_scaled = c / self.cell_sizes[0]
+
+        cam_rays = util.gen_rays(
+            all_poses, W_scaled, H_scaled, focal_scaled, self.z_near, self.z_far, c=c_scaled
+        )  # (NV, H, W, 8)
+
+        self.renderer.eval()
+
+        with torch.no_grad():
+            test_rays = cam_rays[view_dest]  # (H_scaled, W_scaled, 8)
+            test_images = all_images[views_src]  # (NS, 3, H, W)
+            self.net.encode(
+                test_images.unsqueeze(0),
+                all_poses[views_src].unsqueeze(0),
+                focal.to(device=self.device),
+                c=c.to(device=self.device),
+            )
+
+            test_rays = test_rays.reshape(1, H_scaled * W_scaled, -1)  # (1, H_scaled*W_scaled, 8)
+            render = self.render_par(test_rays)  # (H_scaled*W_scaled, num_anchors_per_scale, 7)
+
+            # reshape the render to be (1, num_anchors_per_scale, H_scaled, W_scaled, 7)
+            render = render.reshape(1, self.num_anchors_per_scale, H_scaled, W_scaled, 7)
+
+        dest_img = all_images[view_dest].permute(1, 2, 0).to("cpu")
+        dest_img = dest_img * 0.5 + 0.5
+
+        boxes_gt = util.convert_cells_to_bboxes(all_bboxes[view_dest][0], self.anchors, H_scaled, W_scaled, is_predictions=False)[0]
+        boxes_gt = util.nms(boxes_gt, 1, 0.8)
+        boxes_gt_visual = util.draw_bounding_boxes(dest_img, boxes_gt)
+
+        boxes_predicted = util.convert_cells_to_bboxes(render, self.anchors, H_scaled, W_scaled, is_predictions=True)[0]
+        boxes_predicted = util.nms(boxes_predicted, 1, 0.8)
+        boxes_predicted_visual = util.draw_bounding_boxes(dest_img, boxes_predicted)
+
+        source_views = (
+            (all_images[views_src] * 0.5 + 0.5)
+            .permute(0, 2, 3, 1)
+            .cpu()
+            .numpy()
+            .reshape(-1, H, W, 3)
+        )
+
+        vis_list = [
+            *source_views,
+            dest_img.cpu().numpy(),
+            boxes_gt_visual,
+            boxes_predicted_visual,
+        ]
+
+        vis = np.hstack(vis_list)
+
+        self.renderer.train()
+
+        return vis, None

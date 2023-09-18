@@ -185,10 +185,10 @@ class Trainer:
                             test_losses = self.eval_step(test_data, global_step=step_id)
                         self.net.train()
                         test_loss_str = fmt_loss_str(test_losses)
-                        self.writer.add_scalars("train", losses, global_step=step_id)
-                        self.writer.add_scalars(
-                            "test", test_losses, global_step=step_id
-                        )
+                        # self.writer.add_scalars("train", losses, global_step=step_id)
+                        # self.writer.add_scalars(
+                        #     "test", test_losses, global_step=step_id
+                        # )
                         util.print_with_time("*** Eval:", "E", epoch, "B", batch, test_loss_str, " lr")
 
                     if batch % self.save_interval == 0 and (epoch > 0 or batch > 0):

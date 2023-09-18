@@ -178,7 +178,7 @@ class YOLODataset(torch.utils.data.Dataset):
                 anchor_on_scale = anchor_idx % self.num_anchors_per_scale
 
                 # Identifying the grid size for the scale
-                (s_h, s_w) = (height // self.cell_sizes[scale_idx], width // self.cell_sizes[scale_idx])
+                (s_h, s_w) = grid_sizes[scale_idx]
 
                 # Identifying the cell to which the bounding box belongs
                 i, j = int(s_h * y), int(s_w * x)
