@@ -44,19 +44,19 @@ class YoloRenderer(torch.nn.Module):
         points = rays[:, None, :3] + z_samp.unsqueeze(2) * rays[:, None, 3:6]  # (B, K, 3)
         points = points.reshape(1, -1, 3)  # (1, B*K, 3)
 
-        split_points = torch.split(points, self.eval_batch_size, dim=0)
+        split_points = torch.split(points, self.eval_batch_size, dim=1)
 
         viewdirs = rays[:, None, 3:6].expand(-1, K, -1)  # (B, K, 3)
         viewdirs = viewdirs.reshape(1, -1, 3)  # (1, B*K, 3)
 
-        split_viewdirs = torch.split(viewdirs, self.eval_batch_size, dim=0)
+        split_viewdirs = torch.split(viewdirs, self.eval_batch_size, dim=1)
 
         val_all = []
 
         for pnts, dirs in zip(split_points, split_viewdirs):
             val_all.append(self.net(pnts, coarse=True, viewdirs=dirs))
 
-        out = torch.cat(val_all, dim=0)
+        out = torch.cat(val_all, dim=1)
         out = out.reshape(B, K, -1)  # (B, K, num_anchors_per_scale*7)
 
         # reshape the render to be (B, K, num_anchors_per_scale, 7)
@@ -65,15 +65,20 @@ class YoloRenderer(torch.nn.Module):
         # TODO: maybe this needs a different activation function?
         probabilities = torch.sigmoid(out[..., 0])  # (B, K, num_anchors_per_scale)
 
+        # sum up the probabilities
+        summed_probabilities = probabilities.sum(dim=1)  # (B, num_anchors_per_scale)
+
         # multiply the remaining values by the probabilities and sum them up by K
         final_values = out[..., 1:] * probabilities.unsqueeze(-1)  # (B, K, num_anchors_per_scale, 6)
         final_values = final_values.sum(dim=1)  # (B, num_anchors_per_scale, 6)
 
-        # sum up the probabilities
-        final_probabilities = probabilities.sum(dim=1)  # (B, num_anchors_per_scale)
+        # divide the summed values by the summed probabilities
+        final_values = final_values / summed_probabilities.unsqueeze(-1)  # (B, num_anchors_per_scale, 6)
+
+        max_probabilities = probabilities.max(dim=1)[0]  # (B, num_anchors_per_scale)
 
         # concatenate the probabilities and the values
-        return torch.cat([final_probabilities.unsqueeze(-1), final_values], dim=-1)  # (B, num_anchors_per_scale, 7)
+        return torch.cat([max_probabilities.unsqueeze(-1), final_values], dim=-1)  # (B, num_anchors_per_scale, 7)
 
     def bind_parallel(self, net, gpus = None):
         self.net = net

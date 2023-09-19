@@ -646,7 +646,7 @@ def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
         box_predictions[..., 0:2] = torch.sigmoid(box_predictions[..., 0:2])
         box_predictions[..., 2:] = torch.exp(
             box_predictions[..., 2:]) * anchors
-        scores = torch.sigmoid(predictions[..., 0:1])
+        scores = predictions[..., 0:1]
         best_class = torch.argmax(predictions[..., 5:], dim=-1).unsqueeze(-1)
 
     # Else we will just calculate scores and best class.
@@ -704,6 +704,8 @@ def nms(bboxes, iou_threshold, threshold):
         first_box = bboxes.pop(0)
         bboxes_nms.append(first_box)
 
+        print(len(bboxes))
+
         # Iterate over the remaining bounding boxes.
         for box in bboxes:
             # Compare the IOU of the first box with the current box.
@@ -715,8 +717,8 @@ def nms(bboxes, iou_threshold, threshold):
 
 
 def draw_bounding_boxes(image, boxes):
-    # Getting 2 different colors from the color map for 2 different classes
-    colors = [(1.0, 0.48, 0.0), (0.0, 0.79, 0.14)]  # RGB format
+    # Getting 2 different colors for 2 different classes
+    colors = [(1.0, 0.48, 0.0), (0.0, 0.79, 0.14)]
 
     # Reading the image with OpenCV
     img = np.array(image)
