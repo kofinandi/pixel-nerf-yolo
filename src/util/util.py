@@ -690,6 +690,8 @@ def nms(bboxes, iou_threshold, threshold):
     # Filter out bounding boxes with confidence below the threshold.
     bboxes = [box for box in bboxes if box[1] > threshold]
 
+    print("bboxes above threshold: ", len(bboxes))
+
     # Filter out bounding boxes with width or height to small or to large
     bboxes = [box for box in bboxes if 10e-4 < box[4] < 10e4 and 10e-4 < box[5] < 10e4]
 
@@ -703,8 +705,6 @@ def nms(bboxes, iou_threshold, threshold):
         # Get the first bounding box.
         first_box = bboxes.pop(0)
         bboxes_nms.append(first_box)
-
-        print(len(bboxes))
 
         # Iterate over the remaining bounding boxes.
         for box in bboxes:
@@ -753,6 +753,6 @@ def draw_bounding_boxes(image, boxes):
         # Add class name to the bounding box
         class_label = class_pred == 0 and "Human" or "Car"
         cv2.putText(output_image, class_label, (upper_left_x, upper_left_y - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.25, colors[class_pred], thickness=4)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.25, colors[class_pred], thickness=1)
 
     return output_image

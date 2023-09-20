@@ -146,6 +146,14 @@ class YoloLoss(torch.nn.Module):
         class_loss = self.cross_entropy((pred[..., 5:][obj]),
                                         target[..., 5][obj].long())
 
+        # if any of the losses is nan, print all the losses
+        if torch.isnan(box_loss) or torch.isnan(object_loss) or torch.isnan(no_object_loss) or torch.isnan(class_loss):
+            print("box_loss", box_loss)
+            print("object_loss", object_loss)
+            print("no_object_loss", no_object_loss)
+            print("class_loss", class_loss)
+            print("ious", ious)
+
         # Total loss
         return (
                 box_loss
