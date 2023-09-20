@@ -148,11 +148,12 @@ class YoloLoss(torch.nn.Module):
 
         # if any of the losses is nan, print all the losses
         if torch.isnan(box_loss) or torch.isnan(object_loss) or torch.isnan(no_object_loss) or torch.isnan(class_loss):
-            print("box_loss", box_loss)
-            print("object_loss", object_loss)
-            print("no_object_loss", no_object_loss)
-            print("class_loss", class_loss)
+            print("box_loss", box_loss.item())
+            print("object_loss", object_loss.item())
+            print("no_object_loss", no_object_loss.item())
+            print("class_loss", class_loss.item())
             print("ious", ious)
+            print("pred max", torch.max(pred))
 
         # Total loss
         return (
