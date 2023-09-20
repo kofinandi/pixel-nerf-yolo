@@ -154,6 +154,7 @@ class YoloLoss(torch.nn.Module):
             print("class_loss", class_loss.item())
             print("ious", ious)
             print("pred max", torch.max(pred))
+            print("pred max index", torch.argmax(pred))
 
         # Total loss
         return (
