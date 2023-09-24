@@ -141,12 +141,15 @@ class YOLOTrainer(trainlib.Trainer):
         # reshape the render to be (SB * num_scales, ray_batch_size, num_anchors_per_scale, 7)
         render = render.reshape(SB * self.num_scales, self.ray_batch_size, self.num_anchors_per_scale, 7)
 
-        loss = self.yolo_loss(render, all_bboxes_gt, self.anchors)
+        loss, box_loss, object_loss, no_object_loss, class_loss = self.yolo_loss(render, all_bboxes_gt, self.anchors)
 
         if is_train:
             loss.backward()
 
-        return loss.item()
+        loss_dict = {"t": loss.item(), "box_loss": box_loss.item(), "object_loss": object_loss.item(),
+                     "no_object_loss": no_object_loss.item(), "class_loss": class_loss.item()}
+
+        return loss_dict
 
     def train_step(self, data, global_step=None):
         return self.calc_losses(data, is_train=True)

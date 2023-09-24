@@ -117,9 +117,6 @@ class YoloLoss(torch.nn.Module):
         obj = target[..., 0] == 1
         no_obj = target[..., 0] == 0
 
-        print("obj", obj.sum().item())
-        print("no_obj", obj.sum().item())
-
         # Calculating No object loss
         no_object_loss = self.bce(
             (pred[..., 0:1][no_obj]), (target[..., 0:1][no_obj]),
@@ -154,6 +151,7 @@ class YoloLoss(torch.nn.Module):
                 box_loss
                 + object_loss
                 + no_object_loss
-                + class_loss
+                + class_loss,
+            box_loss, object_loss, no_object_loss, class_loss
         )
 
