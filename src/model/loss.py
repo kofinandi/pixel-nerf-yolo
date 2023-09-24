@@ -117,6 +117,9 @@ class YoloLoss(torch.nn.Module):
         obj = target[..., 0] == 1
         no_obj = target[..., 0] == 0
 
+        print("obj", obj.numel())
+        print("no_obj", obj.numel())
+
         # Calculating No object loss
         no_object_loss = self.bce(
             (pred[..., 0:1][no_obj]), (target[..., 0:1][no_obj]),
@@ -132,7 +135,7 @@ class YoloLoss(torch.nn.Module):
         ious = util.iou(box_preds[obj], target[..., 1:5][obj]).detach()
         # Calculating Object loss
         object_loss = self.mse(pred[..., 0:1][obj],
-                               ious * target[..., 0:1][obj])
+                               ious * target[..., 0:1][obj]) if obj.numel() > 0 else torch.tensor(0)
 
         # Predicted box coordinates
         pred[..., 1:3] = self.sigmoid(pred[..., 1:3])
@@ -140,21 +143,11 @@ class YoloLoss(torch.nn.Module):
         target[..., 3:5] = torch.log(1e-6 + target[..., 3:5] / anchors)
         # Calculating box coordinate loss
         box_loss = self.mse(pred[..., 1:5][obj],
-                            target[..., 1:5][obj])
+                            target[..., 1:5][obj]) if obj.numel() > 0 else torch.tensor(0)
 
         # Claculating class loss
         class_loss = self.cross_entropy((pred[..., 5:][obj]),
-                                        target[..., 5][obj].long())
-
-        # if any of the losses is nan, print all the losses
-        if torch.isnan(box_loss) or torch.isnan(object_loss) or torch.isnan(no_object_loss) or torch.isnan(class_loss):
-            print("box_loss", box_loss.item())
-            print("object_loss", object_loss.item())
-            print("no_object_loss", no_object_loss.item())
-            print("class_loss", class_loss.item())
-            print("ious", ious)
-            print("pred max", torch.max(pred))
-            print("pred max index", torch.argmax(pred))
+                                        target[..., 5][obj].long()) if obj.numel() > 0 else torch.tensor(0)
 
         # Total loss
         return (
