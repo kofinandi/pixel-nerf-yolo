@@ -1,6 +1,7 @@
 import torch
 from util import util
 
+
 class AlphaLossNV2(torch.nn.Module):
     """
     Implement Neural Volumes alpha loss 2
@@ -63,7 +64,7 @@ class RGBWithUncertainty(torch.nn.Module):
         """computes the error per output, weights each element by the log variance
         outputs is B x 3, targets is B x 3, betas is B"""
         weighted_element_err = (
-            torch.mean(self.element_loss(outputs, targets), -1) / betas
+                torch.mean(self.element_loss(outputs, targets), -1) / betas
         )
         return torch.mean(weighted_element_err) + torch.mean(torch.log(betas))
 
@@ -83,7 +84,7 @@ class RGBWithBackground(torch.nn.Module):
         """If we're using background, then the color is color_fg + lambda_bg * color_bg.
         We want to weight the background rays less, while not putting all alpha on bg"""
         weighted_element_err = torch.mean(self.element_loss(outputs, targets), -1) / (
-            1 + lambda_bg
+                1 + lambda_bg
         )
         return torch.mean(weighted_element_err) + torch.mean(torch.log(lambda_bg))
 
@@ -102,14 +103,20 @@ def get_rgb_loss(conf, coarse=True, using_bg=False, reduction="mean"):
         else torch.nn.MSELoss(reduction=reduction)
     )
 
+
 class YoloLoss(torch.nn.Module):
-    def __init__(self, num_anchors_per_scale):
+    def __init__(self, num_anchors_per_scale, box_loss, object_loss, no_object_loss, class_loss):
         super().__init__()
         self.mse = torch.nn.MSELoss()
         self.bce = torch.nn.BCEWithLogitsLoss()
         self.cross_entropy = torch.nn.CrossEntropyLoss()
         self.sigmoid = torch.nn.Sigmoid()
         self.num_anchors_per_scale = num_anchors_per_scale
+
+        self.box_loss = box_loss
+        self.object_loss = object_loss
+        self.no_object_loss = no_object_loss
+        self.class_loss = class_loss
 
     def forward(self, pred, target, anchors):
         # Identifying which cells in target have objects
@@ -142,16 +149,31 @@ class YoloLoss(torch.nn.Module):
         box_loss = self.mse(pred[..., 1:5][obj],
                             target[..., 1:5][obj]) if obj.sum().item() > 0 else torch.tensor(0)
 
-        # Claculating class loss
+        # Calculating class loss
         class_loss = self.cross_entropy((pred[..., 5:][obj]),
                                         target[..., 5][obj].long()) if obj.sum().item() > 0 else torch.tensor(0)
 
         # Total loss
         return (
-                box_loss
-                + object_loss
-                + no_object_loss
-                + class_loss,
+            box_loss * self.box_loss
+            + object_loss * self.object_loss
+            + no_object_loss * self.no_object_loss
+            + class_loss * self.class_loss,
             box_loss, object_loss, no_object_loss, class_loss
         )
 
+    @classmethod
+    def from_conf(cls, conf, num_anchors_per_scale):
+        print("using weights for yolo loss")
+        print("box_loss", conf["yolo.weights.box_loss"])
+        print("object_loss", conf["yolo.weights.object_loss"])
+        print("no_object_loss", conf["yolo.weights.no_object_loss"])
+        print("class_loss", conf["yolo.weights.class_loss"])
+
+        return cls(
+            num_anchors_per_scale,
+            conf["yolo.weights.box_loss"],
+            conf["yolo.weights.object_loss"],
+            conf["yolo.weights.no_object_loss"],
+            conf["yolo.weights.class_loss"],
+        )

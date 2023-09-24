@@ -41,7 +41,7 @@ class YOLOTrainer(trainlib.Trainer):
 
         self.ray_batch_size = conf["yolo.ray_batch_size"]
 
-        self.yolo_loss = loss.YoloLoss(self.num_anchors_per_scale).to(device=device)
+        self.yolo_loss = loss.YoloLoss.from_conf(conf, self.num_anchors_per_scale).to(device=device)
 
     def extra_save_state(self):
         torch.save(self.renderer.state_dict(), self.renderer_state_path)
