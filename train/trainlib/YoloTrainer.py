@@ -180,9 +180,7 @@ class YOLOTrainer(trainlib.Trainer):
 
         curr_nviews = self.nviews[torch.randint(0, len(self.nviews), (1,)).item()]
         views_src = np.sort(np.random.choice(NV, curr_nviews, replace=False))
-        view_dest = np.random.randint(0, NV - curr_nviews)
-        for vs in range(curr_nviews):
-            view_dest += view_dest >= views_src[vs]
+        view_dest = np.random.choice(views_src)
         views_src = torch.from_numpy(views_src)
 
         # TODO: use all the scales
