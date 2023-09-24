@@ -107,6 +107,7 @@ class YOLOTrainer(trainlib.Trainer):
                 # reshape the rays
                 cam_rays = cam_rays.reshape(-1, 8)  # (NV*H_scaled*W_scaled, 8)
 
+                # TODO: check if this H_scaled, W_scaled is the same as above
                 # reshape the bbox ground truth
                 bbox_gt_all = bboxes_at_scale.reshape(-1, self.num_anchors_per_scale, 6)  # (NV*H_scaled*W_scaled, num_anchors_per_scale, 6)
 
@@ -136,7 +137,9 @@ class YOLOTrainer(trainlib.Trainer):
             c=all_c,
         )
 
-        render = self.render_par(all_rays)  # (SB * num_scales * ray_batch_size, num_anchors_per_scale, 7)
+        # TODO: check sizes
+        # TODO: do a loop here to do bigger batches in splits
+        render = self.render_par(all_rays)  # (SB * num_scales * ray_batch_size, num_anchors_per_scale, 8)
 
         # reshape the render to be (SB * num_scales, ray_batch_size, num_anchors_per_scale, 7)
         render = render.reshape(SB * self.num_scales, self.ray_batch_size, self.num_anchors_per_scale, 7)
@@ -175,7 +178,6 @@ class YOLOTrainer(trainlib.Trainer):
         focal = data["focal"][batch_idx: batch_idx + 1].to(device=self.device)  # (2)
         c = data["c"][batch_idx: batch_idx + 1].to(device=self.device)  # (2)
 
-        # TODO: get the number of views from a different array
         NV, _, H, W = all_images.shape
 
         curr_nviews = self.nviews[torch.randint(0, len(self.nviews), (1,)).item()]
@@ -183,7 +185,6 @@ class YOLOTrainer(trainlib.Trainer):
         view_dest = np.random.choice(views_src)
         views_src = torch.from_numpy(views_src)
 
-        # TODO: use all the scales
         H_scaled = H // self.cell_sizes[0]
         W_scaled = W // self.cell_sizes[0]
         # scale the focal and c by the cell size

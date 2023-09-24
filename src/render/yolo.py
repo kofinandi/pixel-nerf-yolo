@@ -35,6 +35,7 @@ class YoloRenderer(torch.nn.Module):
         )
 
     def forward(self, rays):
+        # TODO: check incoming size
         rays = rays.reshape(-1, 8)  # (SB * B, 8)
 
         z_samp = self.sample_coarse(rays)
@@ -56,13 +57,12 @@ class YoloRenderer(torch.nn.Module):
         for pnts, dirs in zip(split_points, split_viewdirs):
             val_all.append(self.net(pnts, coarse=True, viewdirs=dirs))
 
-        out = torch.cat(val_all, dim=1)
+        out = torch.cat(val_all, dim=1) # TODO: is this the correct dim?
         out = out.reshape(B, K, -1)  # (B, K, num_anchors_per_scale*7)
 
         # reshape the render to be (B, K, num_anchors_per_scale, 7)
         out = out.reshape(B, K, self.num_anchors_per_scale, 7)
 
-        # TODO: maybe this needs a different activation function?
         probabilities = torch.sigmoid(out[..., 0])  # (B, K, num_anchors_per_scale)
 
         # sum up the probabilities
