@@ -222,6 +222,11 @@ class YOLOTrainer(trainlib.Trainer):
 
         boxes_predicted = util.convert_cells_to_bboxes(render, self.anchors, H_scaled, W_scaled, is_predictions=True)[0]
         boxes_predicted = util.nms(boxes_predicted, 1, 0.8)
+
+        if len(boxes_predicted) == 0:
+            print("no boxes predicted")
+            return None, None
+
         boxes_predicted_visual = util.draw_bounding_boxes(dest_img, boxes_predicted)
 
         source_views = (
