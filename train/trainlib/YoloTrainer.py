@@ -14,7 +14,6 @@ class YOLOTrainer(trainlib.Trainer):
         self.renderer = renderer
         self.net = net
         self.dset = dset
-        self.val_dset = val_dset
         self.device = device
         self.nviews = nviews
         self.render_par = render_par
@@ -168,7 +167,7 @@ class YOLOTrainer(trainlib.Trainer):
         self.renderer.train()
         return losses
 
-    def vis_step(self, data, global_step=None, idx=None):
+    def vis_step(self, data, global_step=None, idx=None, srcs=None, dest=None):
         if "images" not in data:
             return {}
         if idx is None:
@@ -186,8 +185,8 @@ class YOLOTrainer(trainlib.Trainer):
         NV, _, H, W = all_images.shape
 
         curr_nviews = self.nviews[torch.randint(0, len(self.nviews), (1,)).item()]
-        views_src = np.sort(np.random.choice(NV, curr_nviews, replace=False))
-        view_dest = np.random.choice(views_src)
+        views_src = np.sort(np.random.choice(NV, curr_nviews, replace=False)) if srcs is None else srcs
+        view_dest = np.random.choice(views_src) if dest is None else dest
         views_src = torch.from_numpy(views_src)
 
         H_scaled = H // self.cell_sizes[0]
