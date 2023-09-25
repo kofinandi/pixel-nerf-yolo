@@ -688,6 +688,8 @@ def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
 # Non-maximum suppression function to remove overlapping bounding boxes
 def nms(bboxes, iou_threshold, threshold):
     # Filter out bounding boxes with confidence below the threshold.
+    print("highest confidence:", max([box[1] for box in bboxes]))
+
     bboxes = [box for box in bboxes if box[1] > threshold]
 
     print("bboxes above threshold", threshold, ":", len(bboxes))
