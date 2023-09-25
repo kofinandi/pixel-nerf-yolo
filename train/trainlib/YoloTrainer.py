@@ -43,6 +43,11 @@ class YOLOTrainer(trainlib.Trainer):
 
         self.yolo_loss = loss.YoloLoss.from_conf(conf, self.num_anchors_per_scale).to(device=device)
 
+        self.early_restart = conf["yolo.early_restart"]
+
+        self.nms_iou_threshold = conf["yolo.nms_iou_threshold"]
+        self.nms_threshold = conf["yolo.nms_threshold"]
+
     def extra_save_state(self):
         torch.save(self.renderer.state_dict(), self.renderer_state_path)
 
@@ -217,13 +222,13 @@ class YOLOTrainer(trainlib.Trainer):
         dest_img = dest_img * 0.5 + 0.5
 
         boxes_gt = util.convert_cells_to_bboxes(all_bboxes[view_dest][0], self.anchors, H_scaled, W_scaled, is_predictions=False)[0]
-        boxes_gt = util.nms(boxes_gt, 1, 0.8)
+        boxes_gt = util.nms(boxes_gt, self.nms_iou_threshold, self.nms_threshold)
         boxes_gt_visual = util.draw_bounding_boxes(dest_img, boxes_gt)
 
         boxes_predicted = util.convert_cells_to_bboxes(render, self.anchors, H_scaled, W_scaled, is_predictions=True)[0]
-        boxes_predicted = util.nms(boxes_predicted, 1, 0.8)
+        boxes_predicted = util.nms(boxes_predicted, self.nms_iou_threshold, self.nms_threshold)
 
-        if len(boxes_predicted) == 0 and len(boxes_gt) > 0:
+        if self.early_restart and len(boxes_predicted) == 0 and len(boxes_gt) > 0:
             print("no boxes predicted")
             return None, None
 

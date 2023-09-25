@@ -690,7 +690,7 @@ def nms(bboxes, iou_threshold, threshold):
     # Filter out bounding boxes with confidence below the threshold.
     bboxes = [box for box in bboxes if box[1] > threshold]
 
-    print("bboxes above threshold: ", len(bboxes))
+    print("bboxes above threshold", threshold, ":", len(bboxes))
 
     # Filter out bounding boxes with width or height to small or to large
     bboxes = [box for box in bboxes if 10e-4 < box[4] < 10e4 and 10e-4 < box[5] < 10e4]
