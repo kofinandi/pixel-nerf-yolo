@@ -223,7 +223,7 @@ class YOLOTrainer(trainlib.Trainer):
         boxes_predicted = util.convert_cells_to_bboxes(render, self.anchors, H_scaled, W_scaled, is_predictions=True)[0]
         boxes_predicted = util.nms(boxes_predicted, 1, 0.8)
 
-        if len(boxes_predicted) == 0:
+        if len(boxes_predicted) == 0 and len(boxes_gt) > 0:
             print("no boxes predicted")
             return None, None
 
