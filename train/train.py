@@ -60,8 +60,13 @@ if __name__ == '__main__':
         "dset z_near {}, z_far {}, lindisp {}".format(dset.z_near, dset.z_far, dset.lindisp if hasattr(dset, "lindisp") else "N/A")
     )
 
+    early_restart = conf.get_bool("yolo.early_restart", False)
+
     while True:
         net = make_model(conf["model"]).to(device=device)
+
+        print("Number of model parameters:", sum(p.numel() for p in net.parameters() if p.requires_grad))
+
         net.stop_encoder_grad = args.freeze_enc
         if args.freeze_enc:
             print("Encoder frozen")
@@ -75,7 +80,14 @@ if __name__ == '__main__':
         nviews = list(map(int, args.nviews.split()))
 
         trainer = train_util.make_trainer(args, conf, dset, val_dset, net, renderer, render_par, nviews, device)
-        trainer.start()
+        result = trainer.start()
+
+        if result == "nan":
+            print('NaN loss, stopping')
+            break
+
+        if not early_restart:
+            break
 
         print('Restarting training')
         args.resume = False

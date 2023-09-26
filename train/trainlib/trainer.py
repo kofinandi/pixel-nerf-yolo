@@ -4,6 +4,7 @@ import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 import tqdm
 import warnings
+import math
 
 from util import util
 
@@ -177,6 +178,9 @@ class Trainer:
                             " lr",
                             self.optim.param_groups[0]["lr"],
                         )
+                    if math.isnan(losses["t"]):
+                        util.print_with_time("NaN detected in trainer after train_step at epoch", epoch, "batch", batch, loss_str)
+                        return "nan"
 
                     if batch % self.eval_interval == 0:
                         test_data = next(test_data_iter)
@@ -220,7 +224,7 @@ class Trainer:
                             )
                             
                         if vis is None and vis_vals is None:
-                            return
+                            return "no_vis"
 
                         if vis_vals is not None:
                             self.writer.add_scalars(

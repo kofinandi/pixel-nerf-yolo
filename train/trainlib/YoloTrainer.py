@@ -4,7 +4,6 @@ from model import make_model, loss
 import util
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
 
 
 class YOLOTrainer(trainlib.Trainer):
@@ -22,7 +21,6 @@ class YOLOTrainer(trainlib.Trainer):
             args.checkpoints_path,
             args.name,
         )
-
 
         if args.resume:
             if os.path.exists(self.renderer_state_path):
@@ -145,6 +143,24 @@ class YOLOTrainer(trainlib.Trainer):
         # TODO: do a loop here to do bigger batches in splits
         render = self.render_par(all_rays)  # (SB * num_scales * ray_batch_size, num_anchors_per_scale, 8)
 
+        # print if any of the values are nan
+        if torch.isnan(render).any():
+            print("render contains nan")
+            print(render)
+
+        if torch.isnan(all_bboxes_gt).any():
+            print("all_bboxes_gt contains nan")
+            print(all_bboxes_gt)
+
+        # print if any of the values are inf
+        if torch.isinf(render).any():
+            print("render contains inf")
+            print(render)
+
+        if torch.isinf(all_bboxes_gt).any():
+            print("all_bboxes_gt contains inf")
+            print(all_bboxes_gt)
+
         # reshape the render to be (SB * num_scales, ray_batch_size, num_anchors_per_scale, 7)
         render = render.reshape(SB * self.num_scales, self.ray_batch_size, self.num_anchors_per_scale, 7)
 
@@ -152,6 +168,14 @@ class YOLOTrainer(trainlib.Trainer):
 
         if is_train:
             loss.backward()
+
+            # print if any of the gradients are nan
+            if any(torch.isnan(p.grad).any() if p.grad is not None else False for p in self.net.parameters()):
+                print("model gradients contain nan")
+
+            # print if any of the gradients are inf
+            if any(torch.isinf(p.grad).any() if p.grad is not None else False for p in self.net.parameters()):
+                print("model gradients contain inf")
 
         loss_dict = {"t": loss.item(), "box_loss": box_loss.item(), "object_loss": object_loss.item(),
                      "no_object_loss": no_object_loss.item(), "class_loss": class_loss.item()}
