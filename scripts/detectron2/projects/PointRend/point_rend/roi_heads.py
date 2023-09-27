@@ -58,7 +58,6 @@ class PointRendROIHeads(StandardROIHeads):
     """
 
     def __init__(self, cfg, input_shape):
-        # TODO use explicit args style
         super().__init__(cfg, input_shape)
         self._init_mask_head(cfg, input_shape)
 

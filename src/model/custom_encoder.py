@@ -24,7 +24,6 @@ class ConvEncoder(nn.Module):
         self.padding_type = padding_type
         self.use_skip_conn = use_skip_conn
 
-        # TODO: make these configurable
         first_layer_chnls = 64
         mid_layer_chnls = 128
         last_layer_chnls = 128

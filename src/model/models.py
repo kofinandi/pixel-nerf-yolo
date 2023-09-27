@@ -257,7 +257,7 @@ class PixelNeRFNet(torch.nn.Module):
                 )
 
             # Interpret the output
-            mlp_output = mlp_output.reshape(-1, B, self.d_out) # TODO: change this if needed
+            mlp_output = mlp_output.reshape(-1, B, self.d_out)
 
             if self.yolo:
                 return mlp_output
@@ -276,7 +276,6 @@ class PixelNeRFNet(torch.nn.Module):
         Your can put a checkpoint at checkpoints/<exp>/pixel_nerf_init to use as initialization.
         :param opt_init if true, loads from init checkpoint instead of usual even when resuming
         """
-        # TODO: make backups
         if opt_init and not args.resume:
             return
         ckpt_name = (

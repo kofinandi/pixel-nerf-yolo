@@ -109,7 +109,6 @@ class YOLOTrainer(trainlib.Trainer):
                 # reshape the rays
                 cam_rays = cam_rays.reshape(-1, 8)  # (NV*H_scaled*W_scaled, 8)
 
-                # TODO: check if this H_scaled, W_scaled is the same as above
                 # reshape the bbox ground truth
                 bbox_gt_all = bboxes_at_scale.reshape(-1, self.num_anchors_per_scale, 6)  # (NV*H_scaled*W_scaled, num_anchors_per_scale, 6)
 
@@ -139,7 +138,6 @@ class YOLOTrainer(trainlib.Trainer):
             c=all_c,
         )
 
-        # TODO: check sizes
         # TODO: do a loop here to do bigger batches in splits
         render = self.render_par(all_rays)  # (SB * num_scales * ray_batch_size, num_anchors_per_scale, 8)
 
