@@ -95,19 +95,37 @@ class YoloRenderer(torch.nn.Module):
         # reshape the render to be (B, K, num_anchors_per_scale, 7)
         out = out.reshape(B, K, self.num_anchors_per_scale, 7)
 
+        print("out.min", torch.min(out))
+        print("out.max", torch.max(out))
+
         probabilities = torch.sigmoid(out[..., 0])  # (B, K, num_anchors_per_scale)
+
+        print("probabilities.min", torch.min(probabilities))
+        print("probabilities.max", torch.max(probabilities))
 
         # sum up the probabilities
         summed_probabilities = probabilities.sum(dim=1)  # (B, num_anchors_per_scale)
+
+        print("summed_probabilities.min", torch.min(summed_probabilities))
+        print("summed_probabilities.max", torch.max(summed_probabilities))
 
         # multiply the remaining values by the probabilities and sum them up by K
         final_values = out[..., 1:] * probabilities.unsqueeze(-1)  # (B, K, num_anchors_per_scale, 6)
         final_values = final_values.sum(dim=1)  # (B, num_anchors_per_scale, 6)
 
+        print("final_values.min before div", torch.min(final_values))
+        print("final_values.max before div", torch.max(final_values))
+
         # divide the summed values by the summed probabilities
         final_values = final_values / summed_probabilities.unsqueeze(-1)  # (B, num_anchors_per_scale, 6)
 
+        print("final_values.min after div", torch.min(final_values))
+        print("final_values.max after div", torch.max(final_values))
+
         max_probabilities = probabilities.max(dim=1)[0]  # (B, num_anchors_per_scale)
+
+        print("max_probabilities.min", torch.min(max_probabilities))
+        print("max_probabilities.max", torch.max(max_probabilities))
 
         # concatenate the probabilities and the values
         return torch.cat([max_probabilities.unsqueeze(-1), final_values], dim=-1)  # (B, num_anchors_per_scale, 7)
