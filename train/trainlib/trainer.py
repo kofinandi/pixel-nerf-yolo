@@ -34,6 +34,7 @@ class Trainer:
         self.num_total_batches = len(self.train_dataset)
         self.exp_name = args.name
         self.save_interval = conf.get_int("save_interval")
+        self.backup_interval = conf.get_int("backup_interval")
         self.print_interval = conf.get_int("print_interval")
         self.vis_interval = conf.get_int("vis_interval")
         self.eval_interval = conf.get_int("eval_interval")
@@ -194,6 +195,11 @@ class Trainer:
                         #     "test", test_losses, global_step=step_id
                         # )
                         util.print_with_time("*** Eval:", "E", epoch, "B", batch, test_loss_str, " lr")
+
+                    if batch % self.backup_interval == 0 and (epoch > 0 or batch > 0):
+                        if self.managed_weight_saving:
+                            util.print_with_time("saving backup")
+                            self.net.save_weights(self.args, str(epoch - 1))
 
                     if batch % self.save_interval == 0 and (epoch > 0 or batch > 0):
                         util.print_with_time("saving")

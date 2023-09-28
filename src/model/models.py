@@ -301,7 +301,7 @@ class PixelNeRFNet(torch.nn.Module):
             )
         return self
 
-    def save_weights(self, args, opt_init=False):
+    def save_weights(self, args, opt_init=False, epochNum=""):
         """
         Helper for saving weights according to argparse arguments
         :param opt_init if true, saves from init checkpoint instead of usual
@@ -309,12 +309,15 @@ class PixelNeRFNet(torch.nn.Module):
         from shutil import copyfile
 
         ckpt_name = "pixel_nerf_init" if opt_init else "pixel_nerf_latest"
-        backup_name = "pixel_nerf_init_backup" if opt_init else "pixel_nerf_backup"
+        backup_name = "pixel_nerf_init_backup" if opt_init else "pixel_nerf_backup" + epochNum
 
         ckpt_path = osp.join(args.checkpoints_path, args.name, ckpt_name)
         ckpt_backup_path = osp.join(args.checkpoints_path, args.name, backup_name)
 
         if osp.exists(ckpt_path):
             copyfile(ckpt_path, ckpt_backup_path)
-        torch.save(self.state_dict(), ckpt_path)
+
+        if epochNum == "":
+            torch.save(self.state_dict(), ckpt_path)
+
         return self
