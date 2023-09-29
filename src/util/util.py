@@ -636,7 +636,7 @@ def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
     # Number of anchors
     num_anchors = anchors.shape[1]
     # List of all the predictions
-    box_predictions = predictions[..., 1:5]
+    box_predictions = predictions[..., 1:5].clone()
 
     # If the input is predictions then we will pass the x and y coordinate
     # through sigmoid function and width and height to exponent function and
@@ -690,30 +690,30 @@ def nms(bboxes, iou_threshold, threshold):
     # Filter out bounding boxes with confidence below the threshold.
     print("highest confidence:", max([box[1] for box in bboxes]))
 
-    bboxes = [box for box in bboxes if box[1] > threshold]
+    bboxes_filtered = [box for box in bboxes if box[1] > threshold]
 
-    print("bboxes above threshold", threshold, ":", len(bboxes))
+    print("bboxes above threshold", threshold, ":", len(bboxes_filtered))
 
     # Filter out bounding boxes with width or height to small or to large
-    bboxes = [box for box in bboxes if 10e-4 < box[4] < 10e4 and 10e-4 < box[5] < 10e4]
+    # bboxes_filtered = [box for box in bboxes_filtered if 10e-4 < box[4] < 10e4 and 10e-4 < box[5] < 10e4]
 
     # Sort the bounding boxes by confidence in descending order.
-    bboxes = sorted(bboxes, key=lambda x: x[1], reverse=True)
+    bboxes_filtered = sorted(bboxes_filtered, key=lambda x: x[1], reverse=True)
 
     # Initialize the list of bounding boxes after non-maximum suppression.
     bboxes_nms = []
 
-    while bboxes:
+    while bboxes_filtered:
         # Get the first bounding box.
-        first_box = bboxes.pop(0)
+        first_box = bboxes_filtered.pop(0)
         bboxes_nms.append(first_box)
 
         # Iterate over the remaining bounding boxes.
-        for box in bboxes:
+        for box in bboxes_filtered:
             # Compare the IOU of the first box with the current box.
             # If the IOU is higher than the given IOU threshold, remove the box.
             if iou(torch.tensor(first_box[2:]), torch.tensor(box[2:])) > iou_threshold:
-                bboxes.remove(box)
+                bboxes_filtered.remove(box)
 
     return bboxes_nms
 
