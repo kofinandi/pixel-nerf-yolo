@@ -38,6 +38,7 @@ class Trainer:
         self.print_interval = conf.get_int("print_interval")
         self.vis_interval = conf.get_int("vis_interval")
         self.eval_interval = conf.get_int("eval_interval")
+        self.metric_interval = conf.get_int("metric_interval")
         self.num_epoch_repeats = conf.get_int("num_epoch_repeats", 1)
         self.num_epochs = args.epochs
         self.accu_grad = conf.get_int("accu_grad", 1)
@@ -138,6 +139,12 @@ class Trainer:
         """
         return None, None
 
+    def metric_step(self, data):
+        """
+        Metrics step
+        """
+        return None, None, None
+
     def start(self):
         def fmt_loss_str(losses):
             if not isinstance(losses, dict):
@@ -196,10 +203,17 @@ class Trainer:
                         # )
                         util.print_with_time("*** Eval:", "E", epoch, "B", batch, test_loss_str, " lr")
 
+                    if batch % self.metric_interval == 0:
+                        self.net.eval()
+                        with torch.no_grad():
+                            precision, recall, f1 = self.metric_step(self.test_data_loader)
+                        self.net.train()
+                        util.print_with_time("*** Metrics:", "E", epoch, "B", batch, "precision", precision, "recall", recall, "f1", f1)
+
                     if batch % self.backup_interval == 0 and (epoch > 0 or batch > 0):
                         if self.managed_weight_saving:
                             util.print_with_time("saving backup")
-                            self.net.save_weights(self.args, str(epoch - 1))
+                            self.net.save_weights(self.args, epochNum=str(epoch - 1))
 
                     if batch % self.save_interval == 0 and (epoch > 0 or batch > 0):
                         util.print_with_time("saving")

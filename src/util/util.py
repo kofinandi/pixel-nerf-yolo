@@ -688,11 +688,11 @@ def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
 # Non-maximum suppression function to remove overlapping bounding boxes
 def nms(bboxes, iou_threshold, threshold):
     # Filter out bounding boxes with confidence below the threshold.
-    print("highest confidence:", max([box[1] for box in bboxes]))
+    highest_confidence = max([box[1] for box in bboxes])
 
     bboxes_filtered = [box for box in bboxes if box[1] > threshold]
 
-    print("bboxes above threshold", threshold, ":", len(bboxes_filtered))
+    bboxes_above_threshold = len(bboxes_filtered)
 
     # Filter out bounding boxes with width or height to small or to large
     # bboxes_filtered = [box for box in bboxes_filtered if 10e-4 < box[4] < 10e4 and 10e-4 < box[5] < 10e4]
@@ -715,7 +715,7 @@ def nms(bboxes, iou_threshold, threshold):
             if iou(torch.tensor(first_box[2:]), torch.tensor(box[2:])) > iou_threshold:
                 bboxes_filtered.remove(box)
 
-    return bboxes_nms
+    return bboxes_nms, highest_confidence, bboxes_above_threshold
 
 
 def draw_bounding_boxes(image, boxes):
@@ -758,3 +758,33 @@ def draw_bounding_boxes(image, boxes):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.25, colors[class_pred], thickness=1)
 
     return output_image
+
+def calculate_tp_fp_fn(target_bboxes, prediction_bboxes, nms_iou, nms_t, match_iou):
+    target_bboxes_nms, _, _ = nms(target_bboxes, nms_iou, nms_t)
+    prediction_bboxes_nms, _, _ = nms(prediction_bboxes, nms_iou, nms_t)
+
+    tp = 0
+    fp = 0
+    fn = 0
+
+    for prediction_bbox in prediction_bboxes_nms:
+        iou_scores = [iou(torch.tensor(prediction_bbox[2:]), torch.tensor(target_bbox[2:])) for target_bbox in target_bboxes_nms]
+        if max(iou_scores) > match_iou:
+            tp += 1
+            # maybe remove target bbox from list?
+        else:
+            fp += 1
+
+    for target_bbox in target_bboxes_nms:
+        iou_scores = [iou(torch.tensor(target_bbox[2:]), torch.tensor(prediction_bbox[2:])) for prediction_bbox in prediction_bboxes_nms]
+        if max(iou_scores) < match_iou:
+            fn += 1
+
+    return tp, fp, fn
+
+def calculate_precision_recall_f1(tp, fp, fn):
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
+    f1 = 2 * (precision * recall) / (precision + recall)
+
+    return precision, recall, f1

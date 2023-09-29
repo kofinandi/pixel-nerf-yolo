@@ -45,6 +45,9 @@ class YOLOTrainer(trainlib.Trainer):
         self.nms_iou_threshold = conf["yolo.nms_iou_threshold"]
         self.nms_threshold = conf["yolo.nms_threshold"]
 
+        self.metric_views = conf["yolo.metric_views"]
+        self.match_iou_threshold = conf["yolo.match_iou_threshold"]
+
     def extra_save_state(self):
         torch.save(self.renderer.state_dict(), self.renderer_state_path)
 
@@ -189,13 +192,12 @@ class YOLOTrainer(trainlib.Trainer):
         self.renderer.train()
         return losses
 
-    def vis_step(self, data, global_step=None, idx=None, srcs=None, dest=None):
+    def vis_step(self, data, global_step=None, idx=None, srcs=None, dest=None, only_bbox=False):
         if "images" not in data:
             return {}
         if idx is None:
             batch_idx = np.random.randint(0, data["images"].shape[0])
         else:
-            print(idx)
             batch_idx = idx
 
         all_images = data["images"][batch_idx].to(device=self.device)  # (NV, 3, H, W)
@@ -243,16 +245,25 @@ class YOLOTrainer(trainlib.Trainer):
         dest_img = dest_img * 0.5 + 0.5
 
         boxes_gt = util.convert_cells_to_bboxes(all_bboxes[view_dest][0], self.anchors, H_scaled, W_scaled, is_predictions=False)[0]
-        boxes_gt = util.nms(boxes_gt, self.nms_iou_threshold, self.nms_threshold)
-        boxes_gt_visual = util.draw_bounding_boxes(dest_img, boxes_gt)
-
         boxes_predicted = util.convert_cells_to_bboxes(render, self.anchors, H_scaled, W_scaled, is_predictions=True)[0]
-        boxes_predicted = util.nms(boxes_predicted, self.nms_iou_threshold, self.nms_threshold)
+
+        if only_bbox:
+            return boxes_gt, boxes_predicted
+
+        boxes_gt, hc, bat = util.nms(boxes_gt, self.nms_iou_threshold, self.nms_threshold)
+        print("highest confidence:", hc)
+        print("bboxes above threshold", self.nms_threshold, ":", bat)
+
+        boxes_predicted, hc, bat = util.nms(boxes_predicted, self.nms_iou_threshold, self.nms_threshold)
+        print("highest confidence:", hc)
+        print("bboxes above threshold", self.nms_threshold, ":", bat)
+        print("boxes predicted:", len(boxes_predicted))
 
         if self.early_restart and len(boxes_predicted) == 0 and len(boxes_gt) > 0:
             print("no boxes predicted")
             return None, None
 
+        boxes_gt_visual = util.draw_bounding_boxes(dest_img, boxes_gt)
         boxes_predicted_visual = util.draw_bounding_boxes(dest_img, boxes_predicted)
 
         source_views = (
@@ -275,3 +286,21 @@ class YOLOTrainer(trainlib.Trainer):
         self.renderer.train()
 
         return vis, None
+
+    def metric_step(self, data_loader):
+        total_tp = 0
+        total_fp = 0
+        total_fn = 0
+
+        for data in data_loader:
+            for views in self.metric_views:
+                views = np.array(views)
+                for dest in views:
+                    bbox_gt, bbox_pred = self.vis_step(data, idx=0, srcs=views, dest=dest, only_bbox=True)
+                    tp, fp, fn = util.calculate_tp_fp_fn(bbox_gt, bbox_pred, self.nms_iou_threshold, self.nms_threshold, self.match_iou_threshold)
+                    total_tp += tp
+                    total_fp += fp
+                    total_fn += fn
+
+        print("total_tp", total_tp, "total_fp", total_fp, "total_fn", total_fn)
+        return util.calculate_precision_recall_f1(total_tp, total_fp, total_fn)

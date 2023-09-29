@@ -156,15 +156,21 @@ if __name__ == '__main__':
 
         boxes_gt = \
             util.convert_cells_to_bboxes(all_bboxes[view_dest][0], anchors, H_scaled, W_scaled, is_predictions=False)[0]
-        boxes_gt = util.nms(boxes_gt, nmsiou, nmst)
+        boxes_gt, hc, bat = util.nms(boxes_gt, nmsiou, nmst)
         boxes_gt_visual = util.draw_bounding_boxes(dest_img, boxes_gt)
 
+        print("highest confidence:", hc)
+        print("bboxes above threshold", nmst, ":", bat)
+
+
         boxes_predicted = util.convert_cells_to_bboxes(render, anchors, H_scaled, W_scaled, is_predictions=True)[0]
-        boxes_predicted = util.nms(boxes_predicted, nmsiou, nmst)
-
-        print("boxes_predicted", len(boxes_predicted))
-
+        boxes_predicted, hc, bat = util.nms(boxes_predicted, nmsiou, nmst)
         boxes_predicted_visual = util.draw_bounding_boxes(dest_img, boxes_predicted)
+
+        print("highest confidence:", hc)
+        print("bboxes above threshold", nmst, ":", bat)
+        print("boxes predicted:", len(boxes_predicted))
+
 
         source_views = (
             (all_images[views_src] * 0.5 + 0.5)
