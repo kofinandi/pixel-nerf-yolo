@@ -203,7 +203,7 @@ class Trainer:
                         # )
                         util.print_with_time("*** Eval:", "E", epoch, "B", batch, test_loss_str, " lr")
 
-                    if batch % self.metric_interval == 0:
+                    if batch % self.metric_interval == 0 and (epoch > 0 or batch > 200):
                         self.net.eval()
                         with torch.no_grad():
                             precision, recall, f1 = self.metric_step(self.test_data_loader)
