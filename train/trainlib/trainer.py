@@ -26,7 +26,7 @@ class Trainer:
         self.test_data_loader = torch.utils.data.DataLoader(
             test_dataset,
             batch_size=min(args.batch_size, 16),
-            shuffle=True,
+            shuffle=False,
             num_workers=4,
             pin_memory=False,
         )
@@ -165,6 +165,11 @@ class Trainer:
 
         util.print_with_time("Starting training with", self.num_epochs, "epochs")
 
+        save = {"total_loss_array": [], "box_loss_array": [], "object_loss_array": [], "no_object_loss_array": [],
+                "class_loss_array": [], "eval_total_loss_array": [], "eval_box_loss_array": [],
+                "eval_object_loss_array": [], "eval_no_object_loss_array": [], "eval_class_loss_array": [],
+                "precision_array": [], "recall_array": [], "f1_array": []}
+
         progress = tqdm.tqdm(bar_format="[{rate_fmt}] ")
         for epoch in range(self.num_epochs):
             self.writer.add_scalar(
@@ -186,6 +191,12 @@ class Trainer:
                             " lr",
                             self.optim.param_groups[0]["lr"],
                         )
+                        save["total_loss_array"].append(losses["t"])
+                        save["box_loss_array"].append(losses["box_loss"])
+                        save["object_loss_array"].append(losses["object_loss"])
+                        save["no_object_loss_array"].append(losses["no_object_loss"])
+                        save["class_loss_array"].append(losses["class_loss"])
+
                     if math.isnan(losses["t"]):
                         util.print_with_time("NaN detected in trainer after train_step at epoch", epoch, "batch", batch, loss_str)
                         return "nan"
@@ -202,6 +213,11 @@ class Trainer:
                         #     "test", test_losses, global_step=step_id
                         # )
                         util.print_with_time("*** Eval:", "E", epoch, "B", batch, test_loss_str, " lr")
+                        save["eval_total_loss_array"].append(test_losses["t"])
+                        save["eval_box_loss_array"].append(test_losses["box_loss"])
+                        save["eval_object_loss_array"].append(test_losses["object_loss"])
+                        save["eval_no_object_loss_array"].append(test_losses["no_object_loss"])
+                        save["eval_class_loss_array"].append(test_losses["class_loss"])
 
                     if batch % self.metric_interval == 0 and (epoch > 0 or batch > 200):
                         self.net.eval()
@@ -209,6 +225,9 @@ class Trainer:
                             precision, recall, f1 = self.metric_step(self.test_data_loader)
                         self.net.train()
                         util.print_with_time("*** Metrics:", "E", epoch, "B", batch, "precision", precision, "recall", recall, "f1", f1)
+                        save["precision_array"].append(precision)
+                        save["recall_array"].append(recall)
+                        save["f1_array"].append(f1)
 
                     if batch % self.backup_interval == 0 and (epoch > 0 or batch > 0):
                         if self.managed_weight_saving:
@@ -230,6 +249,9 @@ class Trainer:
                             )
                         torch.save({"iter": step_id + 1}, self.iter_state_path)
                         self.extra_save_state()
+                        # loop through all the arrays in save and save them as np arrays
+                        for key in save:
+                            np.save(os.path.join("logs", key + ".npy"), np.array(save[key]))
 
                     if batch % self.vis_interval == 0:
                         util.print_with_time("generating visualization")
