@@ -759,6 +759,7 @@ def draw_bounding_boxes(image, boxes):
 
     return output_image
 
+
 def calculate_tp_fp_fn(target_bboxes, prediction_bboxes, nms_iou, nms_t, match_iou):
     target_bboxes_nms, _, _ = nms(target_bboxes, nms_iou, nms_t)
     prediction_bboxes_nms, _, _ = nms(prediction_bboxes, nms_iou, nms_t)
@@ -790,9 +791,10 @@ def calculate_tp_fp_fn(target_bboxes, prediction_bboxes, nms_iou, nms_t, match_i
 
     return tp, fp, fn
 
+
 def calculate_precision_recall_f1(tp, fp, fn):
-    precision = tp / (tp + fp)
-    recall = tp / (tp + fn)
-    f1 = 2 * (precision * recall) / (precision + recall)
+    precision = tp / (tp + fp) if tp + fp > 0 else 0
+    recall = tp / (tp + fn) if tp + fn > 0 else 0
+    f1 = 2 * (precision * recall) / (precision + recall) if precision + recall > 0 else 0
 
     return precision, recall, f1
