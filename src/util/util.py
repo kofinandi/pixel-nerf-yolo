@@ -767,6 +767,14 @@ def calculate_tp_fp_fn(target_bboxes, prediction_bboxes, nms_iou, nms_t, match_i
     fp = 0
     fn = 0
 
+    if len(target_bboxes_nms) == 0:
+        fp += len(prediction_bboxes_nms)
+        return tp, fp, fn
+
+    if len(prediction_bboxes_nms) == 0:
+        fn += len(target_bboxes_nms)
+        return tp, fp, fn
+
     for prediction_bbox in prediction_bboxes_nms:
         iou_scores = [iou(torch.tensor(prediction_bbox[2:]), torch.tensor(target_bbox[2:])) for target_bbox in target_bboxes_nms]
         if max(iou_scores) > match_iou:
