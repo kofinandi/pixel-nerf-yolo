@@ -695,7 +695,7 @@ def nms(bboxes, iou_threshold, threshold):
     bboxes_above_threshold = len(bboxes_filtered)
 
     # Filter out bounding boxes with width or height to small or to large
-    # bboxes_filtered = [box for box in bboxes_filtered if 10e-4 < box[4] < 10e4 and 10e-4 < box[5] < 10e4]
+    bboxes_filtered = [box for box in bboxes_filtered if 10e-4 < box[4] < 10e4 and 10e-4 < box[5] < 10e4]
 
     # Sort the bounding boxes by confidence in descending order.
     bboxes_filtered = sorted(bboxes_filtered, key=lambda x: x[1], reverse=True)
