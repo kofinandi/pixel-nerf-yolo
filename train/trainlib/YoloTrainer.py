@@ -147,7 +147,7 @@ class YOLOTrainer(trainlib.Trainer):
         )
 
         # TODO: do a loop here to do bigger batches in splits
-        render = self.render_par(all_rays)  # (SB * num_scales * ray_batch_size, num_anchors_per_scale, 8)
+        render = self.render_par(all_rays)  # (SB * num_scales * ray_batch_size, num_anchors_per_scale, 7)
 
         # print if any of the values are nan
         if torch.isnan(render).any():
@@ -166,6 +166,12 @@ class YOLOTrainer(trainlib.Trainer):
         if torch.isinf(all_bboxes_gt).any():
             print("all_bboxes_gt contains inf")
             print(all_bboxes_gt)
+
+        render = render.permute(2, 0, 1)  # (7, SB * num_scales * ray_batch_size, num_anchors_per_scale)
+        render = self.net.conv(render)  # (7, SB * num_scales * ray_batch_size, num_anchors_per_scale)
+        render = render.permute(1, 2, 0)  # (SB * num_scales * ray_batch_size, num_anchors_per_scale, 7)
+
+        render[..., 0] = torch.sigmoid(render[..., 0])
 
         # reshape the render to be (SB * num_scales, ray_batch_size, num_anchors_per_scale, 7)
         render = render.reshape(SB * self.num_scales, self.ray_batch_size, self.num_anchors_per_scale, 7)
