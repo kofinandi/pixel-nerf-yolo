@@ -78,6 +78,8 @@ if __name__ == '__main__':
 
     trainer = train_util.make_trainer(args, conf, dset, val_dset, net, renderer, render_par, nviews, device)
 
+    print("\n------------ Eval ------------")
+
     test_data_loader = torch.utils.data.DataLoader(
         test_dset,
         batch_size=1,
@@ -86,6 +88,7 @@ if __name__ == '__main__':
         pin_memory=False,
     )
 
-    precision, recall, f1 = trainer.metric_step(test_data_loader)
+    precision, recall, f1 = trainer.metric_step(test_data_loader, print_hc=True)
 
-    print("Precision: {}, Recall: {}, F1: {}".format(precision, recall, f1))
+    print("Precision\tRecall\tF1")
+    print("{}\t{}\t{}".format(precision, recall, f1))

@@ -99,7 +99,6 @@ class ResnetFC(nn.Module):
         self.d_out = d_out
         self.d_hidden = d_hidden
 
-        print('n_blocks:', n_blocks)
         print('d_out:', d_out)
 
         self.combine_layer = combine_layer

@@ -48,6 +48,11 @@ class YOLOTrainer(trainlib.Trainer):
         self.metric_views = conf["yolo.metric_views"]
         self.match_iou_threshold = conf["yolo.match_iou_threshold"]
 
+        print("n_coarse", conf["renderer.n_coarse"])
+        print("nms_iou_threshold", self.nms_iou_threshold)
+        print("nms_threshold", self.nms_threshold)
+        print("match_iou_threshold", self.match_iou_threshold)
+
     def extra_save_state(self):
         torch.save(self.renderer.state_dict(), self.renderer_state_path)
 
@@ -287,7 +292,7 @@ class YOLOTrainer(trainlib.Trainer):
 
         return vis, None
 
-    def metric_step(self, data_loader):
+    def metric_step(self, data_loader, print_hc=False):
         total_tp = 0
         total_fp = 0
         total_fn = 0
@@ -297,7 +302,7 @@ class YOLOTrainer(trainlib.Trainer):
                 views = np.array(views)
                 for dest in views:
                     bbox_gt, bbox_pred = self.vis_step(data, idx=0, srcs=views, dest=dest, only_bbox=True)
-                    tp, fp, fn = util.calculate_tp_fp_fn(bbox_gt, bbox_pred, self.nms_iou_threshold, self.nms_threshold, self.match_iou_threshold)
+                    tp, fp, fn = util.calculate_tp_fp_fn(bbox_gt, bbox_pred, self.nms_iou_threshold, self.nms_threshold, self.match_iou_threshold, print_hc=print_hc)
                     total_tp += tp
                     total_fp += fp
                     total_fn += fn

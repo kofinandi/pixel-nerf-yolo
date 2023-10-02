@@ -80,6 +80,7 @@ if __name__ == '__main__':
         nviews = list(map(int, args.nviews.split()))
 
         trainer = train_util.make_trainer(args, conf, dset, val_dset, net, renderer, render_par, nviews, device)
+        print("\n------------ Train ------------")
         result = trainer.start()
 
         if result == "nan":

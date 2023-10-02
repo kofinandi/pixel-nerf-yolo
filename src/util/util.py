@@ -760,9 +760,12 @@ def draw_bounding_boxes(image, boxes):
     return output_image
 
 
-def calculate_tp_fp_fn(target_bboxes, prediction_bboxes, nms_iou, nms_t, match_iou):
+def calculate_tp_fp_fn(target_bboxes, prediction_bboxes, nms_iou, nms_t, match_iou, print_hc=False):
     target_bboxes_nms, _, _ = nms(target_bboxes, nms_iou, nms_t)
-    prediction_bboxes_nms, _, _ = nms(prediction_bboxes, nms_iou, nms_t)
+    prediction_bboxes_nms, hc, _ = nms(prediction_bboxes, nms_iou, nms_t)
+
+    if print_hc:
+        print(f"highest confidence: {hc}")
 
     tp = 0
     fp = 0
