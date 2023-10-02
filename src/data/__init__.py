@@ -46,7 +46,7 @@ def get_split_dataset(dataset_type, datadir, want_split="all", training=True, **
             train_aug_flags = {"extra_inherit_attrs": ["sub_format"]}
     elif dataset_type == "yolo":
         dset_class = YOLODataset
-        flags["z_near"] = 0.1
+        flags["z_near"] = 1
         flags["z_far"] = 30.0
         # TODO: apply color jitter during train
     else:
