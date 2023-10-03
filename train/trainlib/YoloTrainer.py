@@ -170,6 +170,12 @@ class YOLOTrainer(trainlib.Trainer):
         # reshape the render to be (SB * num_scales, ray_batch_size, num_anchors_per_scale, 7)
         render = render.reshape(SB * self.num_scales, self.ray_batch_size, self.num_anchors_per_scale, 7)
 
+        render = render.permute(2, 0, 1)  # (7, SB * num_scales * ray_batch_size, num_anchors_per_scale)
+        render = self.net.conv(render)  # (7, SB * num_scales * ray_batch_size, num_anchors_per_scale)
+        render = render.permute(1, 2, 0)  # (SB * num_scales * ray_batch_size, num_anchors_per_scale, 7)
+
+        render[..., 0] = torch.sigmoid(render[..., 0])
+
         loss, box_loss, object_loss, no_object_loss, class_loss = self.yolo_loss(render, all_bboxes_gt, self.anchors)
 
         if is_train:
@@ -242,6 +248,12 @@ class YOLOTrainer(trainlib.Trainer):
 
             test_rays = test_rays.reshape(1, H_scaled * W_scaled, -1)  # (1, H_scaled*W_scaled, 8)
             render = self.render_par(test_rays)  # (H_scaled*W_scaled, num_anchors_per_scale, 7)
+
+            render = render.permute(2, 0, 1)  # (7, SB * num_scales * ray_batch_size, num_anchors_per_scale)
+            render = self.net.conv(render)  # (7, SB * num_scales * ray_batch_size, num_anchors_per_scale)
+            render = render.permute(1, 2, 0)  # (SB * num_scales * ray_batch_size, num_anchors_per_scale, 7)
+
+            render[..., 0] = torch.sigmoid(render[..., 0])
 
             # reshape the render to be (1, num_anchors_per_scale, H_scaled, W_scaled, 7)
             render = render.reshape(1, self.num_anchors_per_scale, H_scaled, W_scaled, 7)

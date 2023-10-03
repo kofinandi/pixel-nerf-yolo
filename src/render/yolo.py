@@ -94,6 +94,7 @@ class YoloRenderer(torch.nn.Module):
         # reshape the render to be (B, K, num_anchors_per_scale, 7)
         out = out.reshape(B, K, self.num_anchors_per_scale, 7)
 
+        '''
         probabilities = torch.sigmoid(out[..., 0])  # (B, K, num_anchors_per_scale)
 
         # sum up the probabilities
@@ -111,6 +112,12 @@ class YoloRenderer(torch.nn.Module):
 
         # concatenate the probabilities and the values
         return torch.cat([max_probabilities.unsqueeze(-1), final_values], dim=-1)  # (B, num_anchors_per_scale, 7)
+        '''
+
+        # avg all values by K
+        final_values = out.mean(dim=1)  # (B, num_anchors_per_scale, 7)
+
+        return final_values
 
     def bind_parallel(self, net, gpus = None):
         self.net = net

@@ -85,6 +85,9 @@ class PixelNeRFNet(torch.nn.Module):
         # Principal point
         self.register_buffer("c", torch.empty(1, 2), persistent=False)
 
+        self.conv = torch.nn.Conv2d(in_channels=conf.get_int("mlp_coarse.d_out", 7), out_channels=conf.get_int("mlp_coarse.d_out", 7), kernel_size=1, stride=1, padding=0)
+        torch.nn.init.normal_(self.conv.weight)
+
         self.num_objs = 0
         self.num_views_per_obj = 1
 
