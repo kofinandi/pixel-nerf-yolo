@@ -56,10 +56,10 @@ class YOLODataset(torch.utils.data.Dataset):
 
         self.image_scale = conf["yolo.image_scale"]
         self._coord_trans_world = torch.tensor(
-            [[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=torch.float32
+            [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=torch.float32
         )
         self._coord_trans_cam = torch.tensor(
-            [[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=torch.float32
+            [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=torch.float32
         )
 
         self.z_near = z_near
@@ -111,6 +111,7 @@ class YOLODataset(torch.utils.data.Dataset):
         for i in range(img_count):
             pose_path = os.path.join(root_dir, "extrinsic_{:04d}.npy".format(i))
             pose = np.load(pose_path)
+            pose[0] = pose[0] * -1
             pose = (
                     self._coord_trans_world
                     @ torch.tensor(pose, dtype=torch.float32)

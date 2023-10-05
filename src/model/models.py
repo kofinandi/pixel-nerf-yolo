@@ -74,12 +74,13 @@ class PixelNeRFNet(torch.nn.Module):
         self.register_buffer("poses", torch.empty(1, 3, 4), persistent=False)
         self.register_buffer("image_shape", torch.empty(2), persistent=False)
 
+        self.yolo = conf.get_bool("mlp_coarse.yolo", False)
+
         self.d_in = d_in
-        if not conf.get_bool("mlp_coarse.yolo", False):
+        if not self.yolo:
             self.d_out = conf.get_int("mlp_coarse.d_out", 4)
         else:
             self.d_out = conf.get_int("mlp_coarse.d_out", 7) * conf.get_int("mlp_coarse.num_anchors_per_scale", 3)
-        self.yolo = conf.get_bool("mlp_coarse.yolo", False)
         self.d_latent = d_latent
         self.register_buffer("focal", torch.empty(1, 2), persistent=False)
         # Principal point
@@ -111,9 +112,12 @@ class PixelNeRFNet(torch.nn.Module):
             self.num_views_per_obj = 1
 
         self.encoder(images)
-        rot = poses[:, :3, :3].transpose(1, 2)  # (B, 3, 3)
-        trans = -torch.bmm(rot, poses[:, :3, 3:])  # (B, 3, 1)
-        self.poses = torch.cat((rot, trans), dim=-1)  # (B, 3, 4)
+        if not self.yolo:
+            rot = poses[:, :3, :3].transpose(1, 2)  # (B, 3, 3)
+            trans = -torch.bmm(rot, poses[:, :3, 3:])  # (B, 3, 1)
+            self.poses = torch.cat((rot, trans), dim=-1)  # (B, 3, 4)
+        else:
+            self.poses = poses[:, :3, :4]
 
         self.image_shape[0] = images.shape[-1]
         self.image_shape[1] = images.shape[-2]
@@ -129,7 +133,8 @@ class PixelNeRFNet(torch.nn.Module):
         else:
             focal = focal.clone()
         self.focal = focal.float()
-        self.focal[..., 1] *= -1.0
+        if not self.yolo:
+            self.focal[..., 1] *= -1.0
 
         if c is None:
             # Default principal point is center of image
@@ -205,7 +210,12 @@ class PixelNeRFNet(torch.nn.Module):
 
             if self.use_encoder:
                 # Grab encoder's latent code.
-                uv = -xyz[:, :, :2] / xyz[:, :, 2:]  # (SB, B, 2)
+                if not self.yolo:
+                    uv = -xyz[:, :, :2] / xyz[:, :, 2:]  # (SB, B, 2)
+                else:
+                    uv = xyz[:, :, :2] / xyz[:, :, 2:]  # (SB, B, 2)
+                    # create a filter where the z is greater than 0
+                    positive_z_filter = xyz[:, :, 2:] > 0
                 uv *= repeat_interleave(
                     self.focal.unsqueeze(1), NS if self.focal.shape[0] > 1 else 1
                 )
@@ -221,6 +231,15 @@ class PixelNeRFNet(torch.nn.Module):
                 latent = latent.transpose(1, 2).reshape(
                     -1, self.latent_size
                 )  # (SB * NS * B, latent)
+
+                if self.yolo:
+                    # transform the positive z filter to be the same shape as latent
+                    positive_z_filter = torch.repeat_interleave(positive_z_filter, self.latent_size, dim=2)
+                    # reshape the filter to be the same shape as latent
+                    positive_z_filter = positive_z_filter.reshape(-1, self.latent_size)
+
+                    # make the latent 0 where z is positive
+                    latent[positive_z_filter] = torch.zeros_like(latent[positive_z_filter])
 
                 if self.d_in == 0:
                     # z_feature not needed
