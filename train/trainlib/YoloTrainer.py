@@ -107,21 +107,25 @@ class YOLOTrainer(trainlib.Trainer):
                 focal_scaled = focal / self.cell_sizes[scale_idx]
                 c_scaled = c / self.cell_sizes[scale_idx]
 
+                target_poses = poses[image_ord[scene_idx]]  # (curr_nviews, 4, 4)
+
                 # generate all the rays for all the views
                 cam_rays = util.gen_rays_yolo(
-                    poses, W_scaled, H_scaled, focal_scaled, c_scaled, self.z_near, self.z_far
-                )  # (NV, H_scaled, W_scaled, 8)
+                    target_poses, W_scaled, H_scaled, focal_scaled, c_scaled, self.z_near, self.z_far
+                )  # (curr_nviews, H_scaled, W_scaled, 8)
 
-                assert cam_rays.shape == (NV, H_scaled, W_scaled, 8)
+                assert cam_rays.shape == (curr_nviews, H_scaled, W_scaled, 8)
 
                 # reshape the rays
-                cam_rays = cam_rays.reshape(-1, 8)  # (NV*H_scaled*W_scaled, 8)
+                cam_rays = cam_rays.reshape(-1, 8)  # (curr_nviews*H_scaled*W_scaled, 8)
+
+                target_bbox = bboxes_at_scale[image_ord[scene_idx]]  # (curr_nviews, 1, anchors_per_scale, H_scaled, W_scaled, 6)
 
                 # reshape the bbox ground truth
-                bbox_gt_all = bboxes_at_scale.reshape(-1, self.num_anchors_per_scale, 6)  # (NV*H_scaled*W_scaled, num_anchors_per_scale, 6)
+                bbox_gt_all = target_bbox.reshape(-1, self.num_anchors_per_scale, 6)  # (NV*H_scaled*W_scaled, num_anchors_per_scale, 6)
 
                 # select random rays to render
-                pix_inds = torch.randint(0, NV * H_scaled * W_scaled, (self.ray_batch_size,))
+                pix_inds = torch.randint(0, curr_nviews * H_scaled * W_scaled, (self.ray_batch_size,))
 
                 rays = cam_rays[pix_inds]  # (ray_batch_size, 8)
                 bbox_gt = bbox_gt_all[pix_inds]  # (ray_batch_size, num_anchors_per_scale, 6)
