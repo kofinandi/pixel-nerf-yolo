@@ -869,4 +869,4 @@ def gen_rays_yolo(poses, width, height, focal, c, z_near, z_far):
     # Convert the list of rays to a torch tensor
     rays_tensor = torch.stack(rays)
 
-    return rays_tensor
+    return rays_tensor  # (B, H, W, 8)

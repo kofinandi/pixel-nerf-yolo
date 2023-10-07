@@ -108,8 +108,8 @@ class YOLOTrainer(trainlib.Trainer):
                 c_scaled = c / self.cell_sizes[scale_idx]
 
                 # generate all the rays for all the views
-                cam_rays = util.gen_rays(
-                    poses, W_scaled, H_scaled, focal_scaled, self.z_near, self.z_far, c=c_scaled
+                cam_rays = util.gen_rays_yolo(
+                    poses, W_scaled, H_scaled, focal_scaled, c_scaled, self.z_near, self.z_far
                 )  # (NV, H_scaled, W_scaled, 8)
 
                 assert cam_rays.shape == (NV, H_scaled, W_scaled, 8)
