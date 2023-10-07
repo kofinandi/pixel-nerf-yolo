@@ -801,3 +801,68 @@ def calculate_precision_recall_f1(tp, fp, fn):
     f1 = 2 * (precision * recall) / (precision + recall) if precision + recall > 0 else 0
 
     return precision, recall, f1
+
+
+def gen_rays_yolo(poses, width, height, focal, c, z_near, z_far):
+    # Number of images in the batch
+    batch_size = poses.shape[0]
+
+    # Intrinsic matrix
+    intrinsic_matrix = torch.tensor([[focal[0], 0, c[0]],
+                                     [0, focal[1], c[1]],
+                                     [0, 0, 1]], dtype=torch.float32)
+
+    # Inverse of the intrinsic matrix
+    inv_intrinsic_matrix = torch.inverse(intrinsic_matrix)
+
+    # Create a grid of pixel coordinates
+    grid_x, grid_y = torch.meshgrid(torch.linspace(0, width - 1, width),
+                                    torch.linspace(0, height - 1, height))
+
+    # Flatten the grid
+    pixel_coords = torch.stack([grid_x, grid_y, torch.ones_like(grid_x)], dim=2).view(-1, 3)
+
+    # Calculate direction in camera space for all pixels
+    direction_camera_space = torch.matmul(inv_intrinsic_matrix, pixel_coords.t()).t()
+
+    # Repeat the z_near and z_far for all pixels
+    z_near = torch.tensor(z_near, dtype=torch.float32)
+    z_far = torch.tensor(z_far, dtype=torch.float32)
+    z_near = z_near.repeat(height * width, 1)
+    z_far = z_far.repeat(height * width, 1)
+
+    # Generate camera rays
+    rays = []
+
+    for i in range(batch_size):
+        # Extract the extrinsic matrix for the current image
+        extrinsic_matrix = poses[i]
+
+        # Inverse of the extrinsic matrix
+        inv_extrinsic_matrix = torch.inverse(extrinsic_matrix)
+
+        # Transform direction to world space
+        direction_world_space = torch.matmul(inv_extrinsic_matrix[:3, :3], direction_camera_space.t()).t()
+
+        # Starting point in world space (camera center)
+        start_point = inv_extrinsic_matrix[:3, 3]
+
+        # Repeat the starting point for all pixels
+        start_point = start_point.repeat(height * width, 1)
+
+        # Concatenate the starting point and direction
+        ray = torch.cat([start_point, direction_world_space, z_near, z_far], dim=1)
+
+        # Reshape the ray to (W, H, 8)
+        ray = ray.view(width, height, 8)
+
+        # Reshape the ray to (H, W, 8)
+        ray = ray.permute(1, 0, 2)
+
+        # Append the rays for the current image to the list
+        rays.append(ray)
+
+    # Convert the list of rays to a torch tensor
+    rays_tensor = torch.stack(rays)
+
+    return rays_tensor

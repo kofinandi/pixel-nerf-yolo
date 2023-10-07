@@ -239,7 +239,7 @@ class PixelNeRFNet(torch.nn.Module):
                     positive_z_filter = positive_z_filter.reshape(-1, self.latent_size)
 
                     # make the latent 0 where z is positive
-                    latent[positive_z_filter] = torch.zeros_like(latent[positive_z_filter])
+                    latent[positive_z_filter] = torch.zeros_like(latent[positive_z_filter]).to(latent.device)
 
                 if self.d_in == 0:
                     # z_feature not needed

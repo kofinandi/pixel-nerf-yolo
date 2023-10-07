@@ -64,8 +64,8 @@ class MyTestCase(unittest.TestCase):
         all_focals = test_data_loader.dataset[0]["focal"]
         all_c = test_data_loader.dataset[0]["c"]
 
-        test_image = all_images[2].unsqueeze(0).unsqueeze(0)
-        test_pose = all_poses[2].unsqueeze(0).unsqueeze(0)
+        test_image = all_images[[2, 5]].unsqueeze(0)
+        test_pose = all_poses[[2, 5]].unsqueeze(0)
         test_focal = all_focals.unsqueeze(0)
         test_c = all_c.unsqueeze(0)
 
@@ -76,13 +76,11 @@ class MyTestCase(unittest.TestCase):
             c=test_c,
         )
 
-        test_ray = util.gen_rays(test_pose.squeeze(0), 2, 2, test_focal, 1, 10, c=test_c)
+        test_ray = util.gen_rays_yolo(test_pose.squeeze(0), 48, 27, test_focal.squeeze(0) / 10, test_c.squeeze(0) / 10, 1.0, 30.0)
 
-        test_point1 = torch.tensor([5.0, -1.03, 2.86, 1.0])
-        test_point2 = torch.tensor([-2.23, -3.73, 1.72, 1.0])
-        test_points = torch.stack([test_point1[:3], test_point2[:3]], dim=0).unsqueeze(0)
+        test_point1 = torch.tensor([6.42, -4.64, 2.74]).unsqueeze(0).unsqueeze(0)
         test_viewdir = torch.tensor([0.0, 0.0, 0.0]).unsqueeze(0).unsqueeze(0)
-        net(test_points, viewdirs=test_viewdir)
+        net(test_point1, viewdirs=test_viewdir)
 
 
 if __name__ == '__main__':
