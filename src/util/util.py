@@ -819,6 +819,10 @@ def gen_rays_yolo(poses, width, height, focal, c, z_near, z_far):
     grid_x, grid_y = torch.meshgrid(torch.linspace(0, width - 1, width),
                                     torch.linspace(0, height - 1, height))
 
+    # Add 0.5 to the grid coordinates to match the center of the pixels
+    grid_x = grid_x + 0.49
+    grid_y = grid_y + 0.49
+
     # Flatten the grid
     pixel_coords = torch.stack([grid_x, grid_y, torch.ones_like(grid_x)], dim=2).view(-1, 3)
 

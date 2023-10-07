@@ -9,6 +9,8 @@ import unittest
 import src.model as model
 import src.util as util
 import src.data as data
+import src.render as render
+from src.render import render_util
 import torch
 
 def extra_args(parser):
@@ -50,6 +52,7 @@ class MyTestCase(unittest.TestCase):
         args.datadir = "../data/yolo"
         dset, val_dset, test_dset = data.get_split_dataset(args.dataset_format, args.datadir, conf=conf)
         net = model.make_model(conf["model"])
+        renderer = render_util.make_renderer(conf)
 
         test_data_loader = torch.utils.data.DataLoader(
             test_dset,
@@ -64,8 +67,8 @@ class MyTestCase(unittest.TestCase):
         all_focals = test_data_loader.dataset[0]["focal"]
         all_c = test_data_loader.dataset[0]["c"]
 
-        test_image = all_images[[2, 5]].unsqueeze(0)
-        test_pose = all_poses[[2, 5]].unsqueeze(0)
+        test_image = all_images[2].unsqueeze(0)
+        test_pose = all_poses[2].unsqueeze(0)
         test_focal = all_focals.unsqueeze(0)
         test_c = all_c.unsqueeze(0)
 
@@ -76,9 +79,11 @@ class MyTestCase(unittest.TestCase):
             c=test_c,
         )
 
-        test_point1 = torch.tensor([5.26, -0.83, -0.18]).unsqueeze(0).unsqueeze(0)
-        test_viewdir = torch.tensor([0.0, 0.0, 0.0]).unsqueeze(0).unsqueeze(0)
-        net(test_point1, viewdirs=test_viewdir)
+        test_ray = util.gen_rays_yolo(test_pose, 48, 27, test_focal.squeeze(0) / 10, test_c.squeeze(0) / 10, 5.0, 10.0)
+
+        render_par = renderer.bind_parallel(net, [0])
+
+        renderer(test_ray)
 
 
 if __name__ == '__main__':
