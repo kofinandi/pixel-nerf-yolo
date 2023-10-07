@@ -221,12 +221,12 @@ class YOLOTrainer(trainlib.Trainer):
         H_scaled = H // self.cell_sizes[0]
         W_scaled = W // self.cell_sizes[0]
         # scale the focal and c by the cell size
-        focal_scaled = focal / self.cell_sizes[0]
-        c_scaled = c / self.cell_sizes[0]
+        focal_scaled = focal[0] / self.cell_sizes[0]
+        c_scaled = c[0] / self.cell_sizes[0]
 
-        cam_rays = util.gen_rays(
-            all_poses, W_scaled, H_scaled, focal_scaled, self.z_near, self.z_far, c=c_scaled
-        )  # (NV, H, W, 8)
+        cam_rays = util.gen_rays_yolo(
+            all_poses, W_scaled, H_scaled, focal_scaled, c_scaled, self.z_near, self.z_far
+        )  # (NV, H_scaled, W_scaled, 8)
 
         self.renderer.eval()
 

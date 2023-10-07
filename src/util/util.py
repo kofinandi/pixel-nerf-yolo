@@ -804,13 +804,15 @@ def calculate_precision_recall_f1(tp, fp, fn):
 
 
 def gen_rays_yolo(poses, width, height, focal, c, z_near, z_far):
+    device = poses.device
+
     # Number of images in the batch
     batch_size = poses.shape[0]
 
     # Intrinsic matrix
     intrinsic_matrix = torch.tensor([[focal[0], 0, c[0]],
                                      [0, focal[1], c[1]],
-                                     [0, 0, 1]], dtype=torch.float32)
+                                     [0, 0, 1]], dtype=torch.float32).to(device)
 
     # Inverse of the intrinsic matrix
     inv_intrinsic_matrix = torch.inverse(intrinsic_matrix)
@@ -824,16 +826,16 @@ def gen_rays_yolo(poses, width, height, focal, c, z_near, z_far):
     grid_y = grid_y + 0.49
 
     # Flatten the grid
-    pixel_coords = torch.stack([grid_x, grid_y, torch.ones_like(grid_x)], dim=2).view(-1, 3)
+    pixel_coords = torch.stack([grid_x, grid_y, torch.ones_like(grid_x)], dim=2).view(-1, 3).to(device)
 
     # Calculate direction in camera space for all pixels
-    direction_camera_space = torch.matmul(inv_intrinsic_matrix, pixel_coords.t()).t()
+    direction_camera_space = torch.matmul(inv_intrinsic_matrix, pixel_coords.t()).t().to(device)
 
     # Repeat the z_near and z_far for all pixels
     z_near = torch.tensor(z_near, dtype=torch.float32)
     z_far = torch.tensor(z_far, dtype=torch.float32)
-    z_near = z_near.repeat(height * width, 1)
-    z_far = z_far.repeat(height * width, 1)
+    z_near = z_near.repeat(height * width, 1).to(device)
+    z_far = z_far.repeat(height * width, 1).to(device)
 
     # Generate camera rays
     rays = []
@@ -852,10 +854,10 @@ def gen_rays_yolo(poses, width, height, focal, c, z_near, z_far):
         start_point = inv_extrinsic_matrix[:3, 3]
 
         # Repeat the starting point for all pixels
-        start_point = start_point.repeat(height * width, 1)
+        start_point = start_point.repeat(height * width, 1).to(device)
 
         # Concatenate the starting point and direction
-        ray = torch.cat([start_point, direction_world_space, z_near, z_far], dim=1)
+        ray = torch.cat([start_point, direction_world_space, z_near, z_far], dim=1).to(device)
 
         # Reshape the ray to (W, H, 8)
         ray = ray.view(width, height, 8)
@@ -867,6 +869,6 @@ def gen_rays_yolo(poses, width, height, focal, c, z_near, z_far):
         rays.append(ray)
 
     # Convert the list of rays to a torch tensor
-    rays_tensor = torch.stack(rays)
+    rays_tensor = torch.stack(rays).to(device)
 
     return rays_tensor  # (B, H, W, 8)
