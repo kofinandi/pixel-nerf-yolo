@@ -221,7 +221,7 @@ class PixelNeRFNet(torch.nn.Module):
                 else:
                     uv = xyz[:, :, :2] / xyz[:, :, 2:]  # (SB, B, 2)
                     # create a filter where the z is greater than 0
-                    positive_z_filter = xyz[:, :, 2:] > 0
+                    positive_z_filter = xyz[:, :, 2:] >= 0
                 uv *= repeat_interleave(
                     self.focal.unsqueeze(1), NS if self.focal.shape[0] > 1 else 1
                 )
@@ -259,6 +259,9 @@ class PixelNeRFNet(torch.nn.Module):
 
                     # make the latent 0 where z is positive
                     latent[positive_z_filter] = torch.zeros_like(latent[positive_z_filter]).to(latent.device)
+
+                    # make the latent 0 where it is nan
+                    latent[latent.isnan()] = torch.zeros_like(latent[latent.isnan()]).to(latent.device)
 
                 if latent.isnan().any():
                     print("latent after filter contains nan")
