@@ -171,6 +171,9 @@ class PixelNeRFNet(torch.nn.Module):
             ]
             xyz = xyz_rot + self.poses[:, None, :3, 3]
 
+            if xyz.isnan().any():
+                print("xyz contains nan")
+
             if self.d_in > 0:
                 # * Encode the xyz coordinates
                 if self.use_xyz:
@@ -222,6 +225,10 @@ class PixelNeRFNet(torch.nn.Module):
                 uv += repeat_interleave(
                     self.c.unsqueeze(1), NS if self.c.shape[0] > 1 else 1
                 )  # (SB*NS, B, 2)
+
+                if uv.isnan().any():
+                    print("uv contains nan")
+
                 latent = self.encoder.index(
                     uv, None, self.image_shape
                 )  # (SB * NS, latent, B)
@@ -232,6 +239,9 @@ class PixelNeRFNet(torch.nn.Module):
                     -1, self.latent_size
                 )  # (SB * NS * B, latent)
 
+                if latent.isnan().any():
+                    print("latent contains nan")
+
                 if self.yolo:
                     # transform the positive z filter to be the same shape as latent
                     positive_z_filter = torch.repeat_interleave(positive_z_filter, self.latent_size, dim=2)
@@ -240,6 +250,9 @@ class PixelNeRFNet(torch.nn.Module):
 
                     # make the latent 0 where z is positive
                     latent[positive_z_filter] = torch.zeros_like(latent[positive_z_filter]).to(latent.device)
+
+                if latent.isnan().any():
+                    print("latent after filter contains nan")
 
                 if self.d_in == 0:
                     # z_feature not needed
