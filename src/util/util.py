@@ -632,7 +632,7 @@ def iou(box1, box2, is_pred=True):
 # Function to convert cells to bounding boxes
 def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
     # Batch size used on predictions
-    batch_size = predictions.shape[0]  # (BATCH_SIZE, 3, H, W, 6) or (BATCH_SIZE, 3, H, W, 7)
+    batch_size = predictions.shape[0]  # (BATCH_SIZE, H, W, 3, 6) or (BATCH_SIZE, H, W, 3, 7)
     # Number of anchors
     num_anchors = anchors.shape[1]
     # List of all the predictions
@@ -642,7 +642,7 @@ def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
     # through sigmoid function and width and height to exponent function and
     # calculate the score and best class.
     if is_predictions:
-        anchors = anchors.reshape(1, num_anchors, 1, 1, 2)
+        anchors = anchors.reshape(1, 1, 1, num_anchors, 2)
         box_predictions[..., 0:2] = torch.sigmoid(box_predictions[..., 0:2])
         box_predictions[..., 2:] = torch.exp(
             box_predictions[..., 2:]) * anchors
@@ -658,6 +658,7 @@ def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
     cell_indices_x = (
         torch.arange(w)
         .repeat(predictions.shape[0], num_anchors, h, 1)
+        .permute(0, 2, 3, 1)
         .unsqueeze(-1)
         .to(predictions.device)
     )
@@ -665,8 +666,9 @@ def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
     cell_indices_y = (
         torch.arange(h)
         .repeat(predictions.shape[0], num_anchors, w, 1)
+        .permute(0, 2, 3, 1)
         .unsqueeze(-1)
-        .permute(0, 1, 3, 2, 4)
+        .permute(0, 2, 1, 3, 4)
         .to(predictions.device)
     )
 

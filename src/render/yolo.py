@@ -81,7 +81,7 @@ class YoloRenderer(torch.nn.Module):
             val_all.append(self.net(pnts, coarse=True, viewdirs=dirs))
 
         out = torch.cat(val_all, dim=1)
-        out = out.reshape(B, K, -1)  # (B, K, num_anchors_per_scale*7)
+        out = out.reshape(B, K, -1)  # (B, K, num_anchors_per_scale*7)  # TODO: check
 
         # print if any of the out are nan
         if torch.isnan(out).any():

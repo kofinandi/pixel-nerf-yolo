@@ -61,7 +61,7 @@ class YOLOTrainer(trainlib.Trainer):
 
         all_images = data["images"].to(device=self.device)  # (SB, NV, 3, H, W)
         all_poses = data["poses"].to(device=self.device)  # (SB, NV, 4, 4)
-        all_bboxes = data["bboxes"]  # NV long list, num_scales long tuple, (1, anchors_per_scale, H_scaled, W_scaled, 6)
+        all_bboxes = data["bboxes"]  # NV long list, num_scales long tuple, (SB, H_scaled, W_scaled, anchors_per_scale, 6)
         all_focals = data["focal"].to(device=self.device)  # (SB, 2)
         all_c = data["c"].to(device=self.device)  # (SB, 2)
 
@@ -98,7 +98,7 @@ class YOLOTrainer(trainlib.Trainer):
                 for i in range(len(bboxes)):
                     bboxes_at_scale.append(bboxes[i][scale_idx].to(device=self.device))
 
-                bboxes_at_scale = torch.stack(bboxes_at_scale)  # (NV, 1, anchors_per_scale, H_scaled, W_scaled, 6)
+                bboxes_at_scale = torch.stack(bboxes_at_scale).squeeze(1)  # (NV, H_scaled, W_scaled, anchors_per_scale, 6)
 
                 # scale the height and width of the images by cell size
                 H_scaled = H // self.cell_sizes[scale_idx]
@@ -119,10 +119,10 @@ class YOLOTrainer(trainlib.Trainer):
                 # reshape the rays
                 cam_rays = cam_rays.reshape(-1, 8)  # (curr_nviews*H_scaled*W_scaled, 8)
 
-                target_bbox = bboxes_at_scale[image_ord[scene_idx]]  # (curr_nviews, 1, anchors_per_scale, H_scaled, W_scaled, 6)
+                target_bbox = bboxes_at_scale[image_ord[scene_idx]]  # (curr_nviews, H_scaled, W_scaled, anchors_per_scale, 6)
 
                 # reshape the bbox ground truth
-                bbox_gt_all = target_bbox.reshape(-1, self.num_anchors_per_scale, 6)  # (NV*H_scaled*W_scaled, num_anchors_per_scale, 6)
+                bbox_gt_all = target_bbox.reshape(-1, self.num_anchors_per_scale, 6)  # (curr_nviews*H_scaled*W_scaled, num_anchors_per_scale, 6)
 
                 # select random rays to render
                 pix_inds = torch.randint(0, curr_nviews * H_scaled * W_scaled, (self.ray_batch_size,))
@@ -247,8 +247,8 @@ class YOLOTrainer(trainlib.Trainer):
             test_rays = test_rays.reshape(1, H_scaled * W_scaled, -1)  # (1, H_scaled*W_scaled, 8)
             render = self.render_par(test_rays)  # (H_scaled*W_scaled, num_anchors_per_scale, 7)
 
-            # reshape the render to be (1, num_anchors_per_scale, H_scaled, W_scaled, 7)
-            render = render.reshape(1, self.num_anchors_per_scale, H_scaled, W_scaled, 7)
+            # reshape the render to be (1, H_scaled, W_scaled, num_anchors_per_scale, 7)
+            render = render.reshape(1, H_scaled, W_scaled, self.num_anchors_per_scale, 7)
 
         dest_img = all_images[view_dest].permute(1, 2, 0).to("cpu")
         dest_img = dest_img * 0.5 + 0.5
