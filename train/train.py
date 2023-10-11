@@ -65,7 +65,7 @@ if __name__ == '__main__':
     while True:
         net = make_model(conf["model"]).to(device=device)
 
-        print("Number of model parameters:", sum(p.numel() for p in net.parameters() if p.requires_grad))
+        print("Number of model parameters:", util.count_parameters(net))
 
         net.stop_encoder_grad = args.freeze_enc
         if args.freeze_enc:

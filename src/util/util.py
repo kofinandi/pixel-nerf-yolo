@@ -632,7 +632,7 @@ def iou(box1, box2, is_pred=True):
 # Function to convert cells to bounding boxes
 def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
     # Batch size used on predictions
-    batch_size = predictions.shape[0]  # (BATCH_SIZE, 3, H, W, 6) or (BATCH_SIZE, 3, H, W, 7)
+    batch_size = predictions.shape[0]  # (BATCH_SIZE, H, W, 3, 6) or (BATCH_SIZE, H, W, 3, 7)
     # Number of anchors
     num_anchors = anchors.shape[1]
     # List of all the predictions
@@ -642,7 +642,7 @@ def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
     # through sigmoid function and width and height to exponent function and
     # calculate the score and best class.
     if is_predictions:
-        anchors = anchors.reshape(1, num_anchors, 1, 1, 2)
+        anchors = anchors.reshape(1, 1, 1, num_anchors, 2)
         box_predictions[..., 0:2] = torch.sigmoid(box_predictions[..., 0:2])
         box_predictions[..., 2:] = torch.exp(
             box_predictions[..., 2:]) * anchors
@@ -658,6 +658,7 @@ def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
     cell_indices_x = (
         torch.arange(w)
         .repeat(predictions.shape[0], num_anchors, h, 1)
+        .permute(0, 2, 3, 1)
         .unsqueeze(-1)
         .to(predictions.device)
     )
@@ -665,8 +666,9 @@ def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
     cell_indices_y = (
         torch.arange(h)
         .repeat(predictions.shape[0], num_anchors, w, 1)
+        .permute(0, 2, 3, 1)
         .unsqueeze(-1)
-        .permute(0, 1, 3, 2, 4)
+        .permute(0, 2, 1, 3, 4)
         .to(predictions.device)
     )
 
@@ -801,3 +803,74 @@ def calculate_precision_recall_f1(tp, fp, fn):
     f1 = 2 * (precision * recall) / (precision + recall) if precision + recall > 0 else 0
 
     return precision, recall, f1
+
+
+def gen_rays_yolo(poses, width, height, focal, c, z_near, z_far):
+    device = poses.device
+
+    # Number of images in the batch
+    batch_size = poses.shape[0]
+
+    # Intrinsic matrix
+    intrinsic_matrix = torch.tensor([[focal[0], 0, c[0]],
+                                     [0, focal[1], c[1]],
+                                     [0, 0, 1]], dtype=torch.float32).to(device)
+
+    # Inverse of the intrinsic matrix
+    inv_intrinsic_matrix = torch.inverse(intrinsic_matrix)
+
+    # Create a grid of pixel coordinates
+    grid_x, grid_y = torch.meshgrid(torch.linspace(0, width - 1, width),
+                                    torch.linspace(0, height - 1, height))
+
+    # Add 0.5 to the grid coordinates to match the center of the pixels
+    grid_x = grid_x + 0.49
+    grid_y = grid_y + 0.49
+
+    # Flatten the grid
+    pixel_coords = torch.stack([grid_x, grid_y, torch.ones_like(grid_x)], dim=2).view(-1, 3).to(device)
+
+    # Calculate direction in camera space for all pixels
+    direction_camera_space = torch.matmul(inv_intrinsic_matrix, pixel_coords.t()).t().to(device)
+
+    # Repeat the z_near and z_far for all pixels
+    z_near = torch.tensor(z_near, dtype=torch.float32)
+    z_far = torch.tensor(z_far, dtype=torch.float32)
+    z_near = z_near.repeat(height * width, 1).to(device)
+    z_far = z_far.repeat(height * width, 1).to(device)
+
+    # Generate camera rays
+    rays = []
+
+    for i in range(batch_size):
+        # Extract the extrinsic matrix for the current image
+        extrinsic_matrix = poses[i]
+
+        # Inverse of the extrinsic matrix
+        inv_extrinsic_matrix = torch.inverse(extrinsic_matrix)
+
+        # Transform direction to world space
+        direction_world_space = torch.matmul(inv_extrinsic_matrix[:3, :3], direction_camera_space.t()).t()
+
+        # Starting point in world space (camera center)
+        start_point = inv_extrinsic_matrix[:3, 3]
+
+        # Repeat the starting point for all pixels
+        start_point = start_point.repeat(height * width, 1).to(device)
+
+        # Concatenate the starting point and direction
+        ray = torch.cat([start_point, direction_world_space, z_near, z_far], dim=1).to(device)
+
+        # Reshape the ray to (W, H, 8)
+        ray = ray.view(width, height, 8)
+
+        # Reshape the ray to (H, W, 8)
+        ray = ray.permute(1, 0, 2)
+
+        # Append the rays for the current image to the list
+        rays.append(ray)
+
+    # Convert the list of rays to a torch tensor
+    rays_tensor = torch.stack(rays).to(device)
+
+    return rays_tensor  # (B, H, W, 8)

@@ -56,10 +56,10 @@ class YOLODataset(torch.utils.data.Dataset):
 
         self.image_scale = conf["yolo.image_scale"]
         self._coord_trans_world = torch.tensor(
-            [[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=torch.float32
+            [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=torch.float32
         )
         self._coord_trans_cam = torch.tensor(
-            [[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=torch.float32
+            [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=torch.float32
         )
 
         self.z_near = z_near
@@ -111,6 +111,7 @@ class YOLODataset(torch.utils.data.Dataset):
         for i in range(img_count):
             pose_path = os.path.join(root_dir, "extrinsic_{:04d}.npy".format(i))
             pose = np.load(pose_path)
+            pose[0] = pose[0] * -1
             pose = (
                     self._coord_trans_world
                     @ torch.tensor(pose, dtype=torch.float32)
@@ -120,9 +121,10 @@ class YOLODataset(torch.utils.data.Dataset):
 
         # read all the bounding boxes
         for i in range(img_count):
+            # original: cls, center_x, center_y, width, height
             bboxes = np.roll(
                 np.loadtxt(fname=os.path.join(root_dir, "projected_bboxes_{:04d}.txt".format(i)), delimiter=" ", ndmin=2), 4,
-                axis=1).tolist()
+                axis=1).tolist()  # new: center_x, center_y, width, height, cls
             all_bboxes.append(self._get_all_bboxes(bboxes, all_imgs[i].shape[1], all_imgs[i].shape[2]))
 
         intrinsic_path = os.path.join(root_dir, "intrinsic_0000.npy")
@@ -144,7 +146,7 @@ class YOLODataset(torch.utils.data.Dataset):
             "img_id": index,
             "focal": focal,
             "images": all_imgs,
-            "bboxes": all_bboxes,
+            "bboxes": all_bboxes,  # prob, x, y, w, h, cls
             "poses": all_poses,
             "c": c,
         }
@@ -157,7 +159,7 @@ class YOLODataset(torch.utils.data.Dataset):
 
         # Below assumes 3 scale predictions (as paper) and same num of anchors per scale
         # target : [probabilities, x, y, width, height, class_label]
-        targets = [torch.zeros((self.num_anchors_per_scale, s_h, s_w, 6))
+        targets = [torch.zeros((s_h, s_w, self.num_anchors_per_scale, 6))
                    for (s_h, s_w) in grid_sizes]
 
         # Identify anchor box and cell for each bounding box
@@ -182,13 +184,13 @@ class YOLODataset(torch.utils.data.Dataset):
 
                 # Identifying the cell to which the bounding box belongs
                 i, j = int(s_h * y), int(s_w * x)
-                anchor_taken = targets[scale_idx][anchor_on_scale, i, j, 0]
+                anchor_taken = targets[scale_idx][i, j, anchor_on_scale, 0]
 
                 # Check if the anchor box is already assigned
                 if not anchor_taken and not has_anchor[scale_idx]:
 
                     # Set the probability to 1
-                    targets[scale_idx][anchor_on_scale, i, j, 0] = 1
+                    targets[scale_idx][i, j, anchor_on_scale, 0] = 1
 
                     # Calculating the center of the bounding box relative
                     # to the cell
@@ -205,10 +207,10 @@ class YOLODataset(torch.utils.data.Dataset):
                     )
 
                     # Assigning the box coordinates to the target
-                    targets[scale_idx][anchor_on_scale, i, j, 1:5] = box_coordinates
+                    targets[scale_idx][i, j, anchor_on_scale, 1:5] = box_coordinates
 
                     # Assigning the class label to the target
-                    targets[scale_idx][anchor_on_scale, i, j, 5] = int(class_label)
+                    targets[scale_idx][i, j, anchor_on_scale, 5] = int(class_label)
 
                     # Set the anchor box as assigned for the scale
                     has_anchor[scale_idx] = True
@@ -217,7 +219,7 @@ class YOLODataset(torch.utils.data.Dataset):
                 # IoU is greater than the threshold
                 elif not anchor_taken and iou_anchors[anchor_idx] > self.ignore_iou_thresh:
                     # Set the probability to -1 to ignore the anchor box
-                    targets[scale_idx][anchor_on_scale, i, j, 0] = -1
+                    targets[scale_idx][i, j, anchor_on_scale, 0] = -1
 
         # Return the image and the target
         return tuple(targets)
