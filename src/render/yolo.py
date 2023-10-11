@@ -58,14 +58,14 @@ class YoloRenderer(torch.nn.Module):
         B, K = z_samp.shape
 
         points = rays[:, None, :3] + z_samp.unsqueeze(2) * rays[:, None, 3:6]  # (B, K, 3)
-        points = points.reshape(1, -1, 3)  # (1, B*K, 3)
+        points = points.reshape(-1, 3)  # (B*K, 3)
 
-        split_points = torch.split(points, self.eval_batch_size, dim=1)
+        split_points = torch.split(points, self.eval_batch_size, dim=0)
 
         viewdirs = rays[:, None, 3:6].expand(-1, K, -1)  # (B, K, 3)
-        viewdirs = viewdirs.reshape(1, -1, 3)  # (1, B*K, 3)
+        viewdirs = viewdirs.reshape(-1, 3)  # (B*K, 3)
 
-        split_viewdirs = torch.split(viewdirs, self.eval_batch_size, dim=1)
+        split_viewdirs = torch.split(viewdirs, self.eval_batch_size, dim=0)
 
         val_all = []
 
@@ -78,10 +78,11 @@ class YoloRenderer(torch.nn.Module):
             print("model parameters contain inf")
 
         for pnts, dirs in zip(split_points, split_viewdirs):
-            val_all.append(self.net(pnts, coarse=True, viewdirs=dirs))
+            val_all.append(self.net(pnts.unsqueeze(0), coarse=True, viewdirs=dirs.unsqueeze(0)))
 
-        out = torch.cat(val_all, dim=1)
-        out = out.reshape(B, K, -1)  # (B, K, num_anchors_per_scale*7)  # TODO: check
+        out = torch.cat(val_all, dim=1)  # (1, B*K, num_anchors_per_scale*7)
+        out = out.squeeze(0)  # (B*K, num_anchors_per_scale*7)
+        out = out.reshape(B, K, -1)  # (B, K, num_anchors_per_scale*7)
 
         # print if any of the out are nan
         if torch.isnan(out).any():
