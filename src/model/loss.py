@@ -108,7 +108,7 @@ class YoloLoss(torch.nn.Module):
     def __init__(self, num_anchors_per_scale, box_loss, object_loss, no_object_loss, class_loss):
         super().__init__()
         self.mse = torch.nn.MSELoss()
-        self.bce = torch.nn.BCEWithLogitsLoss()
+        self.bce = torch.nn.BCELoss()
         self.cross_entropy = torch.nn.CrossEntropyLoss()
         self.sigmoid = torch.nn.Sigmoid()
         self.num_anchors_per_scale = num_anchors_per_scale
