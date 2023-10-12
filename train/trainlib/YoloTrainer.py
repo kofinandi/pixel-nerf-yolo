@@ -124,18 +124,14 @@ class YOLOTrainer(trainlib.Trainer):
                 # reshape the bbox ground truth
                 bbox_gt_all = target_bbox.reshape(-1, self.num_anchors_per_scale, 6)  # (curr_nviews*H_scaled*W_scaled, num_anchors_per_scale, 6)
 
-                # select random rays to render
-                pix_inds = torch.randint(0, curr_nviews * H_scaled * W_scaled, (self.ray_batch_size,))
-
-                rays = cam_rays[pix_inds]  # (ray_batch_size, 8)
-                bbox_gt = bbox_gt_all[pix_inds]  # (ray_batch_size, num_anchors_per_scale, 6)
-
                 # append the rays and bbox ground truth to the list
-                all_rays.append(rays)
-                all_bboxes_gt.append(bbox_gt)
+                all_rays.append(cam_rays)
+                all_bboxes_gt.append(bbox_gt_all)
 
-        all_rays = torch.stack(all_rays)  # (SB * num_scales, ray_batch_size, 8)
-        all_bboxes_gt = torch.stack(all_bboxes_gt)  # (SB * num_scales, ray_batch_size, num_anchors_per_scale, 6)
+        all_rays = torch.stack(all_rays)  # (SB * num_scales, num_all_rays, 8)
+        all_bboxes_gt = torch.stack(all_bboxes_gt)  # (SB * num_scales, num_all_rays, num_anchors_per_scale, 6)
+
+        num_all_rays = all_rays.shape[1]
 
         image_ord = image_ord.to(self.device)
         src_images = util.batched_index_select_nd(
@@ -150,8 +146,14 @@ class YOLOTrainer(trainlib.Trainer):
             c=all_c,
         )
 
-        # TODO: do a loop here to do bigger batches in splits
-        render = self.render_par(all_rays)  # (SB * num_scales * ray_batch_size, num_anchors_per_scale, 7)
+        # split the rays into batches
+        all_rays = torch.split(all_rays, self.ray_batch_size, dim=1)  # (SB * num_scales, ray_batch_size, 8)
+
+        render = []
+        for rays in all_rays:
+            render.append(self.render_par(rays))  # (SB * num_scales * ray_batch_size, num_anchors_per_scale, 7)
+
+        render = torch.cat(render, dim=0)  # (SB * num_scales * num_all_rays, num_anchors_per_scale, 7)
 
         # print if any of the values are nan
         if torch.isnan(render).any():
@@ -171,8 +173,8 @@ class YOLOTrainer(trainlib.Trainer):
             print("all_bboxes_gt contains inf")
             print(all_bboxes_gt)
 
-        # reshape the render to be (SB * num_scales, ray_batch_size, num_anchors_per_scale, 7)
-        render = render.reshape(SB * self.num_scales, self.ray_batch_size, self.num_anchors_per_scale, 7)
+        # reshape the render to be (SB * num_scales, num_all_rays, num_anchors_per_scale, 7)
+        render = render.reshape(SB * self.num_scales, num_all_rays, self.num_anchors_per_scale, 7)
 
         loss, box_loss, object_loss, no_object_loss, class_loss = self.yolo_loss(render, all_bboxes_gt, self.anchors)
 
