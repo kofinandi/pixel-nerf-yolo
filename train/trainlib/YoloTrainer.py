@@ -144,50 +144,67 @@ class YOLOTrainer(trainlib.Trainer):
         )
 
         # split the rays into batches
-        all_rays = torch.split(all_rays.to(self.device), self.ray_batch_size, dim=1)  # (SB * num_scales, ray_batch_size, 8)
+        all_rays = torch.split(all_rays, self.ray_batch_size, dim=1)  # (SB * num_scales, ray_batch_size, 8)
+        all_bboxes_gt = torch.split(all_bboxes_gt, self.ray_batch_size, dim=1)  # (SB * num_scales, ray_batch_size, num_anchors_per_scale, 6)
 
-        render = []
-        for rays in all_rays:
-            render.append(self.render_par(rays))  # (SB * num_scales * ray_batch_size, num_anchors_per_scale, 7)
+        total_loss = 0
+        total_box_loss = 0
+        total_object_loss = 0
+        total_no_object_loss = 0
+        total_class_loss = 0
 
-        render = torch.cat(render, dim=0)  # (SB * num_scales * num_all_rays, num_anchors_per_scale, 7)
+        for rays, bboxes_gt in zip(all_rays, all_bboxes_gt):
+            current_ray_batch_size = rays.shape[1]
+            render = self.render_par(rays.to(self.device))  # (SB * num_scales * (< ray_batch_size), num_anchors_per_scale, 7)
 
-        # print if any of the values are nan
-        if torch.isnan(render).any():
-            print("render contains nan")
-            print(render)
+            # print if any of the values are nan
+            if torch.isnan(render).any():
+                print("render contains nan")
+                print(render)
 
-        if torch.isnan(all_bboxes_gt).any():
-            print("all_bboxes_gt contains nan")
-            print(all_bboxes_gt)
+            if torch.isnan(bboxes_gt).any():
+                print("all_bboxes_gt contains nan")
+                print(bboxes_gt)
 
-        # print if any of the values are inf
-        if torch.isinf(render).any():
-            print("render contains inf")
-            print(render)
+            # print if any of the values are inf
+            if torch.isinf(render).any():
+                print("render contains inf")
+                print(render)
 
-        if torch.isinf(all_bboxes_gt).any():
-            print("all_bboxes_gt contains inf")
-            print(all_bboxes_gt)
+            if torch.isinf(bboxes_gt).any():
+                print("all_bboxes_gt contains inf")
+                print(bboxes_gt)
 
-        # reshape the render to be (SB * num_scales, num_all_rays, num_anchors_per_scale, 7)
-        render = render.reshape(SB * self.num_scales, num_all_rays, self.num_anchors_per_scale, 7)
+            # reshape the render to be (SB * num_scales, current_ray_batch_size, num_anchors_per_scale, 7)
+            render = render.reshape(SB * self.num_scales, current_ray_batch_size, self.num_anchors_per_scale, 7)
 
-        loss, box_loss, object_loss, no_object_loss, class_loss = self.yolo_loss(render, all_bboxes_gt, self.anchors)
+            loss, box_loss, object_loss, no_object_loss, class_loss = self.yolo_loss(render, bboxes_gt, self.anchors)
 
-        if is_train:
-            loss.backward()
+            if is_train:
+                loss.backward(retain_graph=True)
 
-            # print if any of the gradients are nan
-            if any(torch.isnan(p.grad).any() if p.grad is not None else False for p in self.net.parameters()):
-                print("model gradients contain nan")
+                # print if any of the gradients are nan
+                if any(torch.isnan(p.grad).any() if p.grad is not None else False for p in self.net.parameters()):
+                    print("model gradients contain nan")
 
-            # print if any of the gradients are inf
-            if any(torch.isinf(p.grad).any() if p.grad is not None else False for p in self.net.parameters()):
-                print("model gradients contain inf")
+                # print if any of the gradients are inf
+                if any(torch.isinf(p.grad).any() if p.grad is not None else False for p in self.net.parameters()):
+                    print("model gradients contain inf")
 
-        loss_dict = {"t": loss.item(), "box_loss": box_loss.item(), "object_loss": object_loss.item(),
-                     "no_object_loss": no_object_loss.item(), "class_loss": class_loss.item()}
+            total_loss += loss.item()
+            total_box_loss += box_loss.item()
+            total_object_loss += object_loss.item()
+            total_no_object_loss += no_object_loss.item()
+            total_class_loss += class_loss.item()
+
+        total_loss /= len(all_rays)
+        total_box_loss /= len(all_rays)
+        total_object_loss /= len(all_rays)
+        total_no_object_loss /= len(all_rays)
+        total_class_loss /= len(all_rays)
+
+        loss_dict = {"t": total_loss, "box_loss": total_box_loss, "object_loss": total_object_loss,
+                     "no_object_loss": total_no_object_loss, "class_loss": total_class_loss}
 
         return loss_dict
 
