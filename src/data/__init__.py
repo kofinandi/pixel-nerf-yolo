@@ -47,7 +47,7 @@ def get_split_dataset(dataset_type, datadir, want_split="all", training=True, **
     elif dataset_type == "yolo":
         dset_class = YOLODataset
         flags["z_near"] = 1
-        flags["z_far"] = 30.0
+        flags["z_far"] = 13.0
         # TODO: apply color jitter during train
     else:
         raise NotImplementedError("Unsupported dataset type", dataset_type)
