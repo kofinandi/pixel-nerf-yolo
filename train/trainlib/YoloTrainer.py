@@ -59,8 +59,8 @@ class YOLOTrainer(trainlib.Trainer):
     def calc_losses(self, data, is_train=True):
         assert "images" in data
 
-        all_images = data["images"].to(device=self.device)  # (SB, NV, 3, H, W)
-        all_poses = data["poses"].to(device=self.device)  # (SB, NV, 4, 4)
+        all_images = data["images"]  # (SB, NV, 3, H, W)
+        all_poses = data["poses"]  # (SB, NV, 4, 4)
         all_bboxes = data["bboxes"]  # NV long list, num_scales long tuple, (SB, H_scaled, W_scaled, anchors_per_scale, 6)
         all_focals = data["focal"].to(device=self.device)  # (SB, 2)
         all_c = data["c"].to(device=self.device)  # (SB, 2)
@@ -133,11 +133,8 @@ class YOLOTrainer(trainlib.Trainer):
 
         num_all_rays = all_rays.shape[1]
 
-        image_ord = image_ord.to(self.device)
-        src_images = util.batched_index_select_nd(
-            all_images, image_ord
-        )  # (SB, NS, 3, H, W)
-        src_poses = util.batched_index_select_nd(all_poses, image_ord)  # (SB, NS, 4, 4)
+        src_images = util.batched_index_select_nd(all_images, image_ord).to(self.device)  # (SB, NS, 3, H, W)
+        src_poses = util.batched_index_select_nd(all_poses, image_ord).to(self.device)  # (SB, NS, 4, 4)
 
         self.net.encode(
             src_images,
@@ -147,7 +144,7 @@ class YOLOTrainer(trainlib.Trainer):
         )
 
         # split the rays into batches
-        all_rays = torch.split(all_rays, self.ray_batch_size, dim=1)  # (SB * num_scales, ray_batch_size, 8)
+        all_rays = torch.split(all_rays.to(self.device), self.ray_batch_size, dim=1)  # (SB * num_scales, ray_batch_size, 8)
 
         render = []
         for rays in all_rays:
