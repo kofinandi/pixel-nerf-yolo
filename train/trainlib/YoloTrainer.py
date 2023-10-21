@@ -128,11 +128,6 @@ class YOLOTrainer(trainlib.Trainer):
                 all_rays.append(cam_rays)
                 all_bboxes_gt.append(bbox_gt_all)
 
-        all_rays = torch.stack(all_rays)  # (SB * num_scales, num_all_rays, 8)
-        all_bboxes_gt = torch.stack(all_bboxes_gt)  # (SB * num_scales, num_all_rays, num_anchors_per_scale, 6)
-
-        num_all_rays = all_rays.shape[1]
-
         src_images = util.batched_index_select_nd(all_images, image_ord).to(self.device)  # (SB, NS, 3, H, W)
         src_poses = util.batched_index_select_nd(all_poses, image_ord).to(self.device)  # (SB, NS, 4, 4)
 
@@ -143,65 +138,74 @@ class YOLOTrainer(trainlib.Trainer):
             c=all_c,
         )
 
-        # split the rays into batches
-        all_rays = torch.split(all_rays, self.ray_batch_size, dim=1)  # (SB * num_scales, ray_batch_size, 8)
-        all_bboxes_gt = torch.split(all_bboxes_gt, self.ray_batch_size, dim=1)  # (SB * num_scales, ray_batch_size, num_anchors_per_scale, 6)
-
         total_loss = 0
         total_box_loss = 0
         total_object_loss = 0
         total_no_object_loss = 0
         total_class_loss = 0
 
-        for rays, bboxes_gt in zip(all_rays, all_bboxes_gt):
-            current_ray_batch_size = rays.shape[1]
-            render = self.render_par(rays.to(self.device))  # (SB * num_scales * (< ray_batch_size), num_anchors_per_scale, 7)
+        scale = 0
+        mini_batch = 0
+        for rays_on_scale, bboxes_on_scale in zip(all_rays, all_bboxes_gt):
+            rays_on_scale = rays_on_scale.unsqueeze(0)
+            bboxes_on_scale = bboxes_on_scale.unsqueeze(0)
 
-            # print if any of the values are nan
-            if torch.isnan(render).any():
-                print("render contains nan")
-                print(render)
+            # split the rays into batches
+            rays_on_scale = torch.split(rays_on_scale, self.ray_batch_size, dim=1)  # (SB, ray_batch_size, 8)
+            bboxes_on_scale = torch.split(bboxes_on_scale, self.ray_batch_size, dim=1)  # (SB, ray_batch_size, num_anchors_per_scale, 6)
 
-            if torch.isnan(bboxes_gt).any():
-                print("all_bboxes_gt contains nan")
-                print(bboxes_gt)
+            for rays, bboxes_gt in zip(rays_on_scale, bboxes_on_scale):
+                mini_batch += 1
+                current_ray_batch_size = rays.shape[1]
+                render = self.render_par(rays.to(self.device))  # (SB * current_ray_batch_size, num_anchors_per_scale, 7)
 
-            # print if any of the values are inf
-            if torch.isinf(render).any():
-                print("render contains inf")
-                print(render)
+                # print if any of the values are nan
+                if torch.isnan(render).any():
+                    print("render contains nan")
+                    print(render)
 
-            if torch.isinf(bboxes_gt).any():
-                print("all_bboxes_gt contains inf")
-                print(bboxes_gt)
+                if torch.isnan(bboxes_gt).any():
+                    print("all_bboxes_gt contains nan")
+                    print(bboxes_gt)
 
-            # reshape the render to be (SB * num_scales, current_ray_batch_size, num_anchors_per_scale, 7)
-            render = render.reshape(SB * self.num_scales, current_ray_batch_size, self.num_anchors_per_scale, 7)
+                # print if any of the values are inf
+                if torch.isinf(render).any():
+                    print("render contains inf")
+                    print(render)
 
-            loss, box_loss, object_loss, no_object_loss, class_loss = self.yolo_loss(render, bboxes_gt, self.anchors)
+                if torch.isinf(bboxes_gt).any():
+                    print("all_bboxes_gt contains inf")
+                    print(bboxes_gt)
 
-            if is_train:
-                loss.backward(retain_graph=True)
+                # reshape the render to be (SB, current_ray_batch_size, num_anchors_per_scale, 7)
+                render = render.reshape(SB, current_ray_batch_size, self.num_anchors_per_scale, 7)
 
-                # print if any of the gradients are nan
-                if any(torch.isnan(p.grad).any() if p.grad is not None else False for p in self.net.parameters()):
-                    print("model gradients contain nan")
+                loss, box_loss, object_loss, no_object_loss, class_loss = self.yolo_loss(render, bboxes_gt, self.anchors[scale])
 
-                # print if any of the gradients are inf
-                if any(torch.isinf(p.grad).any() if p.grad is not None else False for p in self.net.parameters()):
-                    print("model gradients contain inf")
+                if is_train:
+                    loss.backward(retain_graph=True)
 
-            total_loss += loss.item()
-            total_box_loss += box_loss.item()
-            total_object_loss += object_loss.item()
-            total_no_object_loss += no_object_loss.item()
-            total_class_loss += class_loss.item()
+                    # print if any of the gradients are nan
+                    if any(torch.isnan(p.grad).any() if p.grad is not None else False for p in self.net.parameters()):
+                        print("model gradients contain nan")
 
-        total_loss /= len(all_rays)
-        total_box_loss /= len(all_rays)
-        total_object_loss /= len(all_rays)
-        total_no_object_loss /= len(all_rays)
-        total_class_loss /= len(all_rays)
+                    # print if any of the gradients are inf
+                    if any(torch.isinf(p.grad).any() if p.grad is not None else False for p in self.net.parameters()):
+                        print("model gradients contain inf")
+
+                total_loss += loss.item()
+                total_box_loss += box_loss.item()
+                total_object_loss += object_loss.item()
+                total_no_object_loss += no_object_loss.item()
+                total_class_loss += class_loss.item()
+
+            scale += 1
+
+        total_loss /= mini_batch
+        total_box_loss /= mini_batch
+        total_object_loss /= mini_batch
+        total_no_object_loss /= mini_batch
+        total_class_loss /= mini_batch
 
         loss_dict = {"t": total_loss, "box_loss": total_box_loss, "object_loss": total_object_loss,
                      "no_object_loss": total_no_object_loss, "class_loss": total_class_loss}
@@ -225,11 +229,11 @@ class YOLOTrainer(trainlib.Trainer):
         else:
             batch_idx = idx
 
-        all_images = data["images"][batch_idx].to(device=self.device)  # (NV, 3, H, W)
-        all_poses = data["poses"][batch_idx].to(device=self.device)  # (NV, 4, 4)
+        all_images = data["images"][batch_idx]  # (NV, 3, H, W)
+        all_poses = data["poses"][batch_idx]  # (NV, 4, 4)
         all_bboxes = data["bboxes"]  # NV long list, num_scales long tuple, (1, anchors_per_scale, H_scaled, W_scaled, 6)
-        focal = data["focal"][batch_idx: batch_idx + 1].to(device=self.device)  # (2)
-        c = data["c"][batch_idx: batch_idx + 1].to(device=self.device)  # (2)
+        focal = data["focal"][batch_idx: batch_idx + 1]  # (2)
+        c = data["c"][batch_idx: batch_idx + 1]  # (2)
 
         NV, _, H, W = all_images.shape
 
@@ -238,39 +242,55 @@ class YOLOTrainer(trainlib.Trainer):
         view_dest = np.random.choice(views_src) if dest is None else dest
         views_src = torch.from_numpy(views_src)
 
-        H_scaled = H // self.cell_sizes[0]
-        W_scaled = W // self.cell_sizes[0]
-        # scale the focal and c by the cell size
-        focal_scaled = focal[0] / self.cell_sizes[0]
-        c_scaled = c[0] / self.cell_sizes[0]
-
-        cam_rays = util.gen_rays_yolo(
-            all_poses, W_scaled, H_scaled, focal_scaled, c_scaled, self.z_near, self.z_far
-        )  # (NV, H_scaled, W_scaled, 8)
-
         self.renderer.eval()
 
+        boxes_gt = []
+        boxes_predicted = []
+
         with torch.no_grad():
-            test_rays = cam_rays[view_dest]  # (H_scaled, W_scaled, 8)
             test_images = all_images[views_src]  # (NS, 3, H, W)
             self.net.encode(
-                test_images.unsqueeze(0),
-                all_poses[views_src].unsqueeze(0),
+                test_images.unsqueeze(0).to(device=self.device),
+                all_poses[views_src].unsqueeze(0).to(device=self.device),
                 focal.to(device=self.device),
                 c=c.to(device=self.device),
             )
 
-            test_rays = test_rays.reshape(1, H_scaled * W_scaled, -1)  # (1, H_scaled*W_scaled, 8)
-            render = self.render_par(test_rays)  # (H_scaled*W_scaled, num_anchors_per_scale, 7)
+            for scale_idx in range(self.num_scales):
+                # scale the height and width of the images by cell size
+                H_scaled = H // self.cell_sizes[scale_idx]
+                W_scaled = W // self.cell_sizes[scale_idx]
+                # scale the focal and c by the cell size
+                focal_scaled = focal[0] / self.cell_sizes[scale_idx]
+                c_scaled = c[0] / self.cell_sizes[scale_idx]
 
-            # reshape the render to be (1, H_scaled, W_scaled, num_anchors_per_scale, 7)
-            render = render.reshape(1, H_scaled, W_scaled, self.num_anchors_per_scale, 7)
+                cam_rays = util.gen_rays_yolo(
+                    all_poses, W_scaled, H_scaled, focal_scaled, c_scaled, self.z_near, self.z_far
+                )  # (NV, H_scaled, W_scaled, 8)
 
-        dest_img = all_images[view_dest].permute(1, 2, 0).to("cpu")
-        dest_img = dest_img * 0.5 + 0.5
+                test_rays = cam_rays[view_dest]  # (H_scaled, W_scaled, 8)
 
-        boxes_gt = util.convert_cells_to_bboxes(all_bboxes[view_dest][0], self.anchors, H_scaled, W_scaled, is_predictions=False)[0]
-        boxes_predicted = util.convert_cells_to_bboxes(render, self.anchors, H_scaled, W_scaled, is_predictions=True)[0]
+                test_rays = test_rays.reshape(1, H_scaled * W_scaled, -1)  # (1, H_scaled*W_scaled, 8)
+
+                test_rays = test_rays.split(self.ray_batch_size, dim=1)  # (1, ray_batch_size, 8)
+
+                render = []
+                for rays in test_rays:
+                    render.append(self.render_par(rays.to(self.device)).to("cpu"))  # (H_scaled*W_scaled, num_anchors_per_scale, 7)
+
+                render = torch.cat(render, dim=0)  # (H_scaled*W_scaled, num_anchors_per_scale, 7)
+
+                # reshape the render to be (1, H_scaled, W_scaled, num_anchors_per_scale, 7)
+                render = render.reshape(1, H_scaled, W_scaled, self.num_anchors_per_scale, 7)
+
+                boxes_gt.append(util.convert_cells_to_bboxes(all_bboxes[view_dest][scale_idx], self.anchors[scale_idx].to("cpu"),
+                                                             H_scaled, W_scaled, is_predictions=False)[0])
+                boxes_predicted.append(util.convert_cells_to_bboxes(render, self.anchors[scale_idx].to("cpu"),
+                                                                    H_scaled, W_scaled, is_predictions=True)[0])
+
+        # flatten the list of bboxes
+        boxes_gt = [item for sublist in boxes_gt for item in sublist]
+        boxes_predicted = [item for sublist in boxes_predicted for item in sublist]
 
         if only_bbox:
             return boxes_gt, boxes_predicted
@@ -287,6 +307,9 @@ class YOLOTrainer(trainlib.Trainer):
         if self.early_restart and len(boxes_predicted) == 0 and len(boxes_gt) > 0:
             print("no boxes predicted")
             return None, None
+
+        dest_img = all_images[view_dest].permute(1, 2, 0).to("cpu")
+        dest_img = dest_img * 0.5 + 0.5
 
         boxes_gt_visual = util.draw_bounding_boxes(dest_img, boxes_gt)
         boxes_predicted_visual = util.draw_bounding_boxes(dest_img, boxes_predicted)

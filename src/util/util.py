@@ -634,7 +634,7 @@ def convert_cells_to_bboxes(predictions, anchors, h, w, is_predictions=True):
     # Batch size used on predictions
     batch_size = predictions.shape[0]  # (BATCH_SIZE, H, W, 3, 6) or (BATCH_SIZE, H, W, 3, 7)
     # Number of anchors
-    num_anchors = anchors.shape[1]
+    num_anchors = anchors.shape[0]
     # List of all the predictions
     box_predictions = predictions[..., 1:5].clone()
 
