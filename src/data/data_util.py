@@ -19,6 +19,7 @@ class ColorJitterDataset(torch.utils.data.Dataset):
         contrast_range=0.1,
         extra_inherit_attrs=[],
     ):
+        print("Using color jitter dataset")
         self.hue_range = [-hue_range, hue_range]
         self.saturation_range = [1 - saturation_range, 1 + saturation_range]
         self.brightness_range = [1 - brightness_range, 1 + brightness_range]
