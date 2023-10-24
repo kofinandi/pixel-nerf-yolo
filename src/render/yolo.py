@@ -110,8 +110,14 @@ class YoloRenderer(torch.nn.Module):
 
         max_probabilities = probabilities.max(dim=1)[0]  # (B, num_anchors_per_scale)
 
+        output = torch.cat([max_probabilities.unsqueeze(-1), final_values], dim=-1)  # (B, num_anchors_per_scale, 7)
+
+        output = self.net.final_layer(output)  # (B, num_anchors_per_scale, 7)
+
+        output[..., 0] = torch.sigmoid(output[..., 0])  # (B, num_anchors_per_scale, 7)
+
         # concatenate the probabilities and the values
-        return torch.cat([max_probabilities.unsqueeze(-1), final_values], dim=-1)  # (B, num_anchors_per_scale, 7)
+        return output
 
     def bind_parallel(self, net, gpus = None):
         self.net = net
