@@ -3,6 +3,27 @@ import torch.nn as nn
 import torch.nn.functional as F
 import util
 
+import sys
+import os
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "NeRF-YOLO"))
+)
+
+from models.yolo import Model
+
+class YOLOEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        ckpt = torch.load("../NeRF-YOLO/yolov7.pt", map_location="cuda")
+        self.model = Model(ckpt['model'].yaml, ch=3)
+        state_dict = ckpt['model'].float().state_dict()
+        self.model.load_state_dict(state_dict, strict=False)
+
+        self.dims = [1792]
+
+    def forward(self, x):
+        x = self.model(x, feature=True)
+        return x
 
 class ConvEncoder(nn.Module):
     """

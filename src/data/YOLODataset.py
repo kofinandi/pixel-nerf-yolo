@@ -97,7 +97,7 @@ class YOLODataset(torch.utils.data.Dataset):
                 img = imageio.imread(img_path)[..., :3]
 
                 # scale the image
-                img = cv2.resize(img, (0, 0), fx=self.image_scale, fy=self.image_scale)
+                img = cv2.resize(img, (0, 0), fx=self.image_scale[0], fy=self.image_scale[1])
 
                 # turn the image into tensor
                 img_tensor = self.image_to_tensor(img)
@@ -131,8 +131,8 @@ class YOLODataset(torch.utils.data.Dataset):
         intrinsic = np.load(intrinsic_path)
 
         # the focal can be read from the intrinsic npy file which are the same for all images
-        focal = intrinsic[0, 0] * self.image_scale
-        focal = torch.tensor((focal, focal), dtype=torch.float32)
+        focal = intrinsic[0, 0] * np.array(self.image_scale)
+        focal = torch.tensor(focal, dtype=torch.float32)
 
         # the camera center can be read from the intrinsic npy file which are the same for all images
         c = intrinsic[:2, 2] * self.image_scale

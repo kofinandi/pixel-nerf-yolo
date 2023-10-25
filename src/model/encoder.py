@@ -6,7 +6,7 @@ from torch import nn
 import torch.nn.functional as F
 import torchvision
 import util
-from model.custom_encoder import ConvEncoder
+from model.custom_encoder import YOLOEncoder
 import torch.autograd.profiler as profiler
 
 
@@ -53,9 +53,8 @@ class SpatialEncoder(nn.Module):
         norm_layer = util.get_norm_layer(norm_type)
 
         if self.use_custom_resnet:
-            print("WARNING: Custom encoder is experimental only")
-            print("Using simple convolutional encoder")
-            self.model = ConvEncoder(3, norm_layer=norm_layer)
+            print("WARNING: Using YOLO backbone")
+            self.model = YOLOEncoder()
             self.latent_size = self.model.dims[-1]
         else:
             print("Using torchvision", backbone, "encoder")
@@ -125,7 +124,17 @@ class SpatialEncoder(nn.Module):
         x = x.to(device=self.latent.device)
 
         if self.use_custom_resnet:
-            self.latent = self.model(x)
+            latents = self.model(x)
+            align_corners = None if self.index_interp == "nearest " else True
+            latent_sz = latents[0].shape[-2:]
+            for i in range(len(latents)):
+                latents[i] = F.interpolate(
+                    latents[i],
+                    latent_sz,
+                    mode=self.upsample_interp,
+                    align_corners=align_corners,
+                )
+            self.latent = torch.cat(latents, dim=1)
         else:
             x = self.model.conv1(x)
             x = self.model.bn1(x)
