@@ -89,10 +89,6 @@ class PixelNeRFNet(torch.nn.Module):
         self.num_objs = 0
         self.num_views_per_obj = 1
 
-        self.final_layer = torch.nn.Linear(7, 7)
-        torch.nn.init.ones_(self.final_layer.weight)
-        torch.nn.init.zeros_(self.final_layer.bias)
-
     def encode(self, images, poses, focal, z_bounds=None, c=None):
         """
         :param images (NS, 3, H, W)
