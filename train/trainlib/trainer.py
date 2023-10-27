@@ -170,6 +170,8 @@ class Trainer:
                 "eval_object_loss_array": [], "eval_no_object_loss_array": [], "eval_class_loss_array": [],
                 "precision_array": [], "recall_array": [], "f1_array": []}
 
+        best_f1 = 0
+
         progress = tqdm.tqdm(bar_format="[{rate_fmt}] ")
         for epoch in range(self.num_epochs):
             self.writer.add_scalar(
@@ -228,6 +230,12 @@ class Trainer:
                         save["precision_array"].append(precision)
                         save["recall_array"].append(recall)
                         save["f1_array"].append(f1)
+
+                        if f1 > best_f1:
+                            best_f1 = f1
+                            util.print_with_time("saving best")
+                            if self.managed_weight_saving:
+                                self.net.save_weights(self.args, epochNum="_best")
 
                     if batch % self.backup_interval == 0 and (epoch > 0 or batch > 0):
                         if self.managed_weight_saving:
