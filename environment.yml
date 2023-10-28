@@ -19,7 +19,9 @@ dependencies:
   - scipy
   - numpy
   - matplotlib
-  - pytorch==1.6.0
-  - torchvision==0.7.0
+  - pytorch>=2.0.0
+  - torchvision
   - scikit-image==0.17.2
   - tqdm
+  - pandas
+  - seaborn
