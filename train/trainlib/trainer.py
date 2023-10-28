@@ -259,7 +259,7 @@ class Trainer:
                         self.extra_save_state()
                         # loop through all the arrays in save and save them as np arrays
                         for key in save:
-                            np.save(os.path.join("logs", key + ".npy"), np.array(save[key]))
+                            np.save(os.path.join(self.args.logs_path, key + ".npy"), np.array(save[key]))
 
                     if batch % self.vis_interval == 0:
                         util.print_with_time("generating visualization")
