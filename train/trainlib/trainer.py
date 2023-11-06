@@ -181,6 +181,14 @@ class Trainer:
             batch = 0
             for _ in range(self.num_epoch_repeats):
                 for data in self.train_data_loader:
+                    # open pause file
+                    if os.path.exists("pause"):
+                        import time
+                        util.print_with_time("pause file found, pausing")
+                        while os.path.exists("pause"):
+                            time.sleep(5)
+                        util.print_with_time("pause file removed, resuming")
+
                     losses = self.train_step(data, global_step=step_id)
                     loss_str = fmt_loss_str(losses)
                     if batch % self.print_interval == 0:
