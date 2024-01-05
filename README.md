@@ -3,8 +3,6 @@
 Nándor Kőfaragó<br>
 Budapest University of Technology and Economics
 
-Paper available here: https://tdk.bme.hu/VIK/DownloadPaper/Tobbnezetu-objektumdetektalas-NeRF-es-YOLO
-
 ## Environment setup
 
 The easiest to start is by creating a conda environment.
