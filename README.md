@@ -1,6 +1,6 @@
 # pixelNeRF-YOLO: Multi-view object detection using NeRF and YOLO
 
-Nándor Kőfaragó<br>
+Nándor Kőfaragó, Márton Szemenyei<br>
 Budapest University of Technology and Economics
 
 ## Environment setup
